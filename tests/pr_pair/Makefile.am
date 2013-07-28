@@ -66,8 +66,8 @@ bin_PROGRAMS = pr_pair
 
 # Quiter for the server
 pr_pair_SOURCES = ./pr_pair.c
-pr_pair_CPPFLAGS =  $(INCLUDES) -I$(includedir)  -g
-pr_pair_LDFLAGS = -L$(OSM_DBHELPER_PATH)\.libs -lssadbhelper \
+pr_pair_CPPFLAGS =  $(INCLUDES) -I$(includedir)  $(DEPS_CFLAGS)  -g
+pr_pair_LDFLAGS = $(DEPS_LIBS) -L$(OSM_DBHELPER_PATH)\.libs -lssadbhelper \
 									-L$(libdir) -lssa \
 									-L$(exec_prefix)\local\lib \
 									-losmcomp -lopensm -losmvendor  -libumad \

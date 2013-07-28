@@ -131,6 +131,9 @@ AC_ARG_ENABLE(coverage,
 				 esac],[coverage=false])
 AM_CONDITIONAL(COVERAGE, test x$coverage = xtrue)
 
+dnl Checks glib
+PKG_CHECK_MODULES([DEPS], [glib-2.0 >= 2.22.5])
+
 dnl Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
 AC_C_CONST
