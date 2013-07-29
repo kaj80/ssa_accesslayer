@@ -38,6 +38,11 @@
 #include <math.h>
 #include <ssa_comparison.h>
 
+#define MIN(X,Y) ((X) < (Y) ? : (X) : (Y))
+#define MAX(X,Y) ((X) > (Y) ? : (X) : (Y))
+
+#define MAX_HOPS 64
+
 typedef enum _ssa_pr_status_t {
 	SSA_PR_SUCCESS,
 	SSA_PR_ERROR
@@ -53,14 +58,21 @@ typedef struct ssa_path_parms {
 } ssa_path_parms_t;
 
 
+static size_t get_dataset_count(struct ssa_db_diff* p_ssa_db_diff,
+		unsigned int table_id)
+{
+	struct db_dataset *p_dataset = p_ssa_db_diff->db_tables[table_id];
+	return ntohll(p_dataset->set_count);
+}
+
+
 static struct ep_guid_to_lid_tbl_rec* find_guid_to_lid_rec(struct ssa_db_diff* p_ssa_db_diff,
 		const be64_t port_guid)
 {
 	size_t i =0;
-	struct db_dataset *p_dataset = p_ssa_db_diff->db_tables[SSA_TABLE_ID_GUID_TO_LID];
 	struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl = 
 		(struct ep_guid_to_lid_tbl_rec *)p_ssa_db_diff->p_tables[SSA_TABLE_ID_GUID_TO_LID];
-	const size_t n = ntohll(p_dataset->set_count);
+	const size_t n = get_dataset_count(p_ssa_db_diff,SSA_TABLE_ID_GUID_TO_LID);
 
 	for (i = 0; i < n; i++) {
 		if (port_guid == p_guid_to_lid_tbl[i].guid) 
@@ -73,7 +85,7 @@ static ssa_pr_status_t ssa_pr_half_world(struct ssa_db_diff* p_ssa_db_diff,
 		be64_t port_guid)
 {
 	ep_guid_to_lid_tbl_rec *p_source_rec = NULL;
-	const size_t guid_to_lid_count = ntohll(p_ssa_db_diff->db_tables[SSA_TABLE_ID_GUID_TO_LID].set_count);
+	const size_t guid_to_lid_count = get_dataset_count(p_ssa_db_diff,SSA_TABLE_ID_GUID_TO_LID);
 	struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl =
 		        (struct ep_guid_to_lid_tbl_rec *)p_ssa_db_diff->p_tables[SSA_TABLE_ID_GUID_TO_LID];
 	size_t i = 0;
@@ -115,16 +127,55 @@ static ssa_pr_status_t ssa_pr_half_world(struct ssa_db_diff* p_ssa_db_diff,
 	}
 }
 										
-static uint8_t find_destination_port(const struct ssa_db_diff* p_ssa_db_diff,
+static int find_destination_port(const struct ssa_db_diff* p_ssa_db_diff,
+		const uint16_t source_lid,
 		const uint16_t dest_lid)
 {
 	size_t i =0;
-	struct db_dataset *p_lft_top_dataset = p_ssa_db_diff->db_tables[SSA_TABLE_ID_LFT_TOP];
+
 	struct ep_lft_top_tbl_rec *p_lft_top_tbl = 
 		(struct ep_lft_top_tbl_rec *)p_ssa_db_diff->p_tables[SSA_TABLE_ID_LFT_TOP];
-	const size_t n = ntohll(p_dataset->set_count);
+	const size_t lft_top_count = get_dataset_count(p_ssa_db_diff,SSA_TABLE_ID_LFT_TOP);
 
-	
+	struct ep_lft_block_tbl_rec *p_lft_block_tbl = 
+		(struct ep_lft_block_tbl_rec *)p_ssa_db_diff->p_tables[SSA_TABLE_ID_LFT_BLOCK];
+	const size_t lft_block_count = get_dataset_count(p_ssa_db_diff,SSA_TABLE_ID_LFT_BLOCK);
+
+	const size_t lft_block_num = floorl(dest_lid/IB_SMP_DATA_SIZE);
+	const size_t lft_port_num = dest_lid%IB_SMP_DATA_SIZE;
+
+	for (i = 0; i < lft_top_count && source_lid !=ntohs(p_lft_top_tbl[i].lid) ; i++);
+	if(i >= lft_top_count || dest_lid > p_lft_top_tbl[i].lft_top){
+		/*
+		 * Report error
+		 */
+		return -1;
+	}
+
+	for (i = 0; i < lft_block_count && source_lid != ntohs(p_lft_block_tbl[i].lid) && l
+			ft_block_num != ntohs(p_lft_block_tbl[i].block_num); i++);
+
+	return i < lft_block_count ? p_lft_block_tbl[i].block[lft_port_num] : -1;
+}
+
+static ep_port_tbl_rec* find_port(const struct ssa_db_diff* p_ssa_db_diff,
+		const uint16_t source_lid,
+		const int port_num)
+{
+
+}
+
+static ep_link_tbl_rec* find_link(const struct ssa_db_diff* p_ssa_db_diff,
+		const uint16_t lid,
+		const int port_num)
+{
+	size_t i = 0;
+	struct ep_link_tbl_rec  *p_link_tbl = 
+		(struct *ep_link_tbl_rec)p_ssa_db_diff->p_tables[SSA_TABLE_ID_LINK];
+	const size_t link_count = get_dataset_count(p_ssa_db_diff,SSA_TABLE_ID_LINK);
+
+	for (i = 0; i < link_count && lid!=ntohs(p_link_tbl[i].from_lid) && port_num != p_link_tbl[i].from_port_num; i++);
+	return i < link_count ? p_link_tbl[i] : NULL;
 }
 
 static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_diff* p_ssa_db_diff,
@@ -132,7 +183,62 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_diff* p_ssa_db_dif
 		const ep_guid_to_lid_tbl_rec *p_dest_rec,
 		ssa_path_parms* p_path_prm)
 {
-	
+	int source_port_num = -1 ; 
+	int dest_port_num = -1 ;
+	ep_port_tbl_rec *source_port = NULL ;
+	ep_port_tbl_rec *dest_port = NULL ;
+	ep_port_tbl_rec *port = NULL ;
+	uint16_t source_lid = ntohs(p_source_rec->lid);
+	uint16_t dest_lid = ntohs(p_dest_rec->lid);
+
+	p_path_prm->mtu = p_path_prm->rate = p_path_prm->pkt_life = p_path_prm->hops = 0;
+
+	if(p_source_rec->is_switch){
+		source_port_num = find_destination_port(p_ssa_db_diff,source_lid,dest_lid);
+		if(source_port_num < 0){
+			fprintf(srferr,"Error: Destination port is not found. Switch lid:%"SCNu16" , Destination lid:%"SCNu16"\n",
+					source_lid,dest_lid);
+			return SSA_PR_ERROR;
+		}
+	}
+
+	dest_port_num = p_dest_rec->is_switch ? 0 : -1 ;
+
+	source_port = find_port(p_ssa_db_diff,source_lid,source_port_num);
+	dest_port = find_port(p_ssa_db_diff,dest_lid,dest_port_num);
+
+	p_path_prm->pkt_life = source_port == dest_port ? 0 : p_ssa_db_diff->subnet_timeout;
+	p_path_prm->mtu = source_port->mtu;
+	p_path_prm->rate = source_port->rate;
+
+	port = source_port;
+	while( port != dest_port){
+		const ep_link_tbl_rec* link = find_link(p_ssa_db_diff,ntohs(port->port_lid),port->port_num);
+		const uint16_t lid = ntohs(link->to_lid);
+		const uint8_t port_num = link->to_port_num;
+
+		if(NULL == link)
+			return SSA_PR_ERROR;
+
+		port = find_port(p_ssa_db_diff,lid,port_num);
+		if(port == dest_port)
+			break;
+
+		p_path_prm->mtu = MIN(p_path_prm->mtu,port->neighbor_mtu);
+		p_path_prm->rate = MIN(p_path_prm->rate,port->rate);
+
+		port_num = find_destination_port(p_ssa_db_diff,lid,dest_lid);
+		port = find_port(p_ssa_db_diff,lid,port_num);
+
+		p_path_prm->mtu = MIN(p_path_prm->mtu,port->neighbor_mtu);
+		p_path_prm->rate = MIN(p_path_prm->rate,port->rate);
+		p_path_prm->hops++;
+
+		if (p_path_prm->hops > MAX_HOPS)
+			return SSA_PR_ERROR;
+	}
+
+	return SSA_PR_ERROR;
 }
 
 static void ssa_pr_path_output(
