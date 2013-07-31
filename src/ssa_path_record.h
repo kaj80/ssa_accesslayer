@@ -57,10 +57,11 @@ typedef struct ssa_path_parms {
 	uint8_t sl;
 	uint8_t pkt_life;
 	uint8_t reversible;
+	uint8_t hops;
 } ssa_path_parms_t;
 
 
-typedef void ssa_pr_path_dump(const ssa_path_parms *p_path_prm);
+typedef void ssa_pr_path_dump(const ssa_path_parms_t *p_path_prm);
 
 ssa_pr_status_t ssa_pr_half_world(struct ssa_db_diff* p_ssa_db_diff, 
 		be64_t port_guid,

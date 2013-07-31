@@ -28,5 +28,42 @@
 # #
 # #--
 #
-SUBDIRS = tests
+SUBDIRS = . tests 
+
+INCLUDES = -I. -I.. -I$(SSA_SRC)/ -I$(OSM_PATH)/local/include -I$(OSM_PATH)/local/include/infiniband -I$(OSM_DBHELPER_PATH)  
+
+
+# Support debug mode through config variable
+DBG =
+if DEBUG
+DBG += -DDEBUG
+DBG += -g
+endif
+
+
+AM_CPPFLAGS = $(DBG) -Wall -Werror -g
+
+
+COV =
+if COVERAGE
+AM_CPPFLAGS += -fprofile-arcs -ftest-coverage
+COV += -lgcov
+endif
+
+
+LDADD = ${COV}	
+
+
+includedir = @includedir@/infiniband/
+
+
+lib_LTLIBRARIES = libssaacesslayer.la
+
+
+# Quiter for the server
+libssaacesslayer_la_SOURCES = ./src/ssa_path_record.c
+libssaacesslayer_la_LDFLAGS = -export-dynamic
+libssaacesslayer_la_CPPFLAGS =  $(INCLUDES) -I$(includedir)  -g
+
+
 
