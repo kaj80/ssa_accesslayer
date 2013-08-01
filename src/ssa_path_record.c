@@ -114,7 +114,7 @@ static const struct ep_guid_to_lid_tbl_rec* find_guid_to_lid_rec_by_lid(const st
 
 ssa_pr_status_t ssa_pr_half_world(struct ssa_db_diff* p_ssa_db_diff, 
 		be64_t port_guid,
-		ssa_pr_path_dump dump_clbk)
+		ssa_pr_path_dump_t dump_clbk)
 {
 	const struct ep_guid_to_lid_tbl_rec *p_source_rec = NULL;
 	const size_t guid_to_lid_count = get_dataset_count(p_ssa_db_diff,SSA_TABLE_ID_GUID_TO_LID);

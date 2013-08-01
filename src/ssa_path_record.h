@@ -36,6 +36,7 @@
 
 #include <stdint.h>
 #include <byteswap.h>
+#include <infiniband/umad.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,11 +62,11 @@ typedef struct ssa_path_parms {
 } ssa_path_parms_t;
 
 
-typedef void ssa_pr_path_dump(const ssa_path_parms_t *p_path_prm);
+typedef void (*ssa_pr_path_dump_t)(const ssa_path_parms_t *p_path_prm);
 
 ssa_pr_status_t ssa_pr_half_world(struct ssa_db_diff* p_ssa_db_diff, 
 		be64_t port_guid,
-		ssa_pr_path_dump dump_clbk);
+		ssa_pr_path_dump_t dump_clbk);
 
 #ifdef __cplusplus
 }

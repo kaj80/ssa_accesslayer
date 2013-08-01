@@ -33,7 +33,8 @@
 SUBDIRS = .
 
 
-INCLUDES = -I. -I$(SSA_SRC)/ -I$(OSM_PATH)/local/include -I$(OSM_PATH)/local/include/infiniband -I$(OSM_DBHELPER_PATH)  
+INCLUDES = -I. -I$(SSA_SRC)/ -I$(OSM_PATH)/local/include -I$(OSM_PATH)/local/include/infiniband -I$(OSM_DBHELPER_PATH) \
+		 -I../../src  
 
 
 # Support debug mode through config variable
@@ -72,7 +73,5 @@ pr_pair_LDFLAGS = $(DEPS_LIBS) -L$(OSM_DBHELPER_PATH)\.libs -lssadbhelper \
 									-L$(exec_prefix)\local\lib \
 									-losmcomp -lopensm -losmvendor  -libumad \
 									-lpthread 
-
-
-
+									-L..\..\..\.libs -lssaacesslayer
 
