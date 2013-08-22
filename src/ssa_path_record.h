@@ -64,7 +64,7 @@ typedef struct ssa_path_parms {
 
 typedef void (*ssa_pr_path_dump_t)(const ssa_path_parms_t *p_path_prm);
 
-ssa_pr_status_t ssa_pr_half_world(struct ssa_db_diff* p_ssa_db_diff, 
+ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb, 
 		be64_t port_guid,
 		ssa_pr_path_dump_t dump_clbk);
 

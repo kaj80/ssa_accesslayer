@@ -42,7 +42,7 @@
 #include <stdint.h>
 #include <byteswap.h>
 
-#include <ssa_comparison.h>
+#include <ssa_smdb.h>
 #include <ssa_db_helper.h>
 #include <ssa_path_record.h>
 
@@ -102,10 +102,10 @@ static void print_memory_usage(const char* prefix)
 	fclose(pf);
 }
 
-static size_t get_dataset_count(const struct ssa_db_diff* p_ssa_db_diff,
+static size_t get_dataset_count(const struct ssa_db_smdb* p_ssa_db_smdb,
 		unsigned int table_id)
 {
-	const struct db_dataset *p_dataset = &p_ssa_db_diff->db_tables[table_id];
+	const struct db_dataset *p_dataset = &p_ssa_db_smdb->db_tables[table_id];
 	return ntohll(p_dataset->set_count);
 }
 
@@ -133,16 +133,16 @@ static void print_input_prm(const struct input_prm *prm)
 		printf("Compute whole \"world path\" records %s\n");
 }
 
-static struct ssa_db_diff * load_smdb(const char* path)
+static struct ssa_db_smdb * load_smdb(const char* path)
 {
-	struct ssa_db_diff *db_diff = NULL; 
+	struct ssa_db_smdb *db_diff = NULL; 
 	clock_t start, end;
 	double cpu_time_used;
 
 	print_memory_usage("Memory usage before the database loading: ");
 
 	start = clock();
-	db_diff= ssa_db_load(path);
+	db_diff= ssa_db_load(path,SSA_DB_HELPER_DEBUG);
 	end = clock();
 	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	if(NULL != db_diff){
@@ -163,9 +163,9 @@ static struct ssa_db_diff * load_smdb(const char* path)
 	return db_diff;
 }
 
-static void destroy_smdb(struct ssa_db_diff *db_diff)
+static void destroy_smdb(struct ssa_db_smdb *db_diff)
 {
-	ssa_db_diff_destroy(db_diff);
+	ssa_db_smdb_destroy(db_diff);
 	printf("smdb database is destroyed\n");
 }
 
@@ -174,7 +174,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	short dump_to_stdout = 1;
 	FILE* fd_dump = NULL;
 	FILE* fd_input = NULL;
-	struct ssa_db_diff * p_db_diff = NULL ;
+	struct ssa_db_smdb * p_db_diff = NULL ;
 	be64_t *p_guids = NULL;
 	size_t count_guids = 0;
 
