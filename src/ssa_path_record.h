@@ -62,11 +62,12 @@ typedef struct ssa_path_parms {
 } ssa_path_parms_t;
 
 
-typedef void (*ssa_pr_path_dump_t)(const ssa_path_parms_t *p_path_prm);
+typedef void (*ssa_pr_path_dump_t)(const ssa_path_parms_t*,void*);
 
 ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb, 
 		be64_t port_guid,
-		ssa_pr_path_dump_t dump_clbk);
+		ssa_pr_path_dump_t dump_clbk,
+		void* clbk_prm);
 
 #ifdef __cplusplus
 }

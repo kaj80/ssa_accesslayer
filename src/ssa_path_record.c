@@ -114,7 +114,8 @@ static const struct ep_guid_to_lid_tbl_rec* find_guid_to_lid_rec_by_lid(const st
 
 ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb, 
 		be64_t port_guid,
-		ssa_pr_path_dump_t dump_clbk)
+		ssa_pr_path_dump_t dump_clbk,
+		void *clbk_prm)
 {
 	const struct ep_guid_to_lid_tbl_rec *p_source_rec = NULL;
 	const size_t guid_to_lid_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
@@ -166,7 +167,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 
 					path_prm.reversible = SSA_PR_SUCCESS == revers_path_res ;
 					if(NULL!=dump_clbk)
-						dump_clbk(&path_prm);
+						dump_clbk(&path_prm,clbk_prm);
 				}
 			}
 		}
@@ -294,10 +295,4 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 	return SSA_PR_ERROR;
 }
 
-static void ssa_pr_path_output(const ssa_path_parms_t *p_path_prm)
-{
-	printf("source guid: 0x%" PRIx64 " source lid: %"SCNu16" dest guid: 0x%" PRIx64 " dest lid: %"SCNu16" mtu: %u rate: %u reversible: %u\n",
-			ntohll(p_path_prm->from_guid),ntohs(p_path_prm->from_lid),ntohll(p_path_prm->to_guid),ntohs(p_path_prm->to_lid),
-			p_path_prm->mtu,p_path_prm->rate,p_path_prm->reversible);
 
-}

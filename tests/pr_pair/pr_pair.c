@@ -130,7 +130,14 @@ static void print_input_prm(const struct input_prm *prm)
 	else
 		printf("Input file path: %s\n",prm->db_path);
 	if(prm->whole_world)
-		printf("Compute whole \"world path\" records %s\n");
+		printf("Compute \"whole world\" path records.\n");
+}
+
+static void ssa_pr_path_output(const ssa_path_parms_t *p_path_prm, void *prm)
+{
+	FILE *fd = (FILE*)prm;
+	fprintf(fd,"0x%"SCNu16" : %3u : %3u : %3u\n",p_path_prm->to_lid,0,p_path_prm->mtu,p_path_prm->rate);
+
 }
 
 static struct ssa_db_smdb * load_smdb(const char* path)
@@ -151,7 +158,6 @@ static struct ssa_db_smdb * load_smdb(const char* path)
 		print_memory_usage("Memory usage after the database loading: ");
 	}else{
 		fprintf(stderr,"Database loading is failed.\n");
-		exit(EXIT_FAILURE);
 	}
 	/*
 	   start = clock();
@@ -385,7 +391,6 @@ int main(int argc,char *argv[])
 	if(use_single_id_opt){
 		int res = 0 ;
 
-
 		if(strlen(id_string_val)>2 && '0'==id_string_val[0] && 'x'==id_string_val[1])
 			res = sscanf(id_string_val,"0x%"PRIx64,&id);
 		else
@@ -428,6 +433,10 @@ int main(int argc,char *argv[])
 			strncpy(prm.input_path,input_path,PATH_MAX);
 
 	print_input_prm(&prm);
+	if(!run_pr_calculation(&prm))
+		printf("Path record calculation is succeeded\n");
+	else
+		printf("Path record calculation is failed\n");
 
 	return 0;
 }
