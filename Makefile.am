@@ -41,7 +41,7 @@ DBG += -g
 endif
 
 
-AM_CPPFLAGS = $(DBG) -Wall -Werror -g
+AM_CPPFLAGS = $(DBG) -Wall -Werror -g 
 
 
 COV =
@@ -57,13 +57,13 @@ LDADD = ${COV}
 includedir = @includedir@/infiniband/
 
 
-lib_LTLIBRARIES = libssaacesslayer.la
+lib_LTLIBRARIES = libssaaccesslayer.la
 
 
 # Quiter for the server
-libssaacesslayer_la_SOURCES = ./src/ssa_path_record.c
-libssaacesslayer_la_LDFLAGS = -export-dynamic
-libssaacesslayer_la_CPPFLAGS =  $(INCLUDES) -I$(includedir)  -g
+libssaaccesslayer_la_SOURCES = ./src/ssa_path_record.c
+libssaaccesslayer_la_LDFLAGS = -export-dynamic -lm
+libssaaccesslayer_la_CPPFLAGS =  $(INCLUDES) -I$(includedir)  -g 
 
 
 

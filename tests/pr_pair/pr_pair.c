@@ -215,7 +215,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 
 	if(p_prm->guid){
 		p_guids =(be64_t *)calloc(1,sizeof(be64_t));
-		if(NULL!=p_guids){
+		if(NULL==p_guids){
 			fprintf(stderr,"Can't allocate array of guids\n");
 			goto Exit;
 		}
@@ -230,7 +230,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 		const size_t count = get_dataset_count(p_db_diff,SSA_TABLE_ID_GUID_TO_LID);
 
 		p_guids =(be64_t *)calloc(count,sizeof(be64_t));
-		if(NULL!=p_guids){
+		if(NULL==p_guids){
 			fprintf(stderr,"Can't allocate array of guids\n");
 			goto Exit;
 		}
@@ -251,7 +251,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 				goto Exit;
 			}
 
-			while(1==fscanf(fd_input,"0x"PRIx64"",&id)){
+			while(1==fscanf(fd_input,"0x%"PRIx64"",&id)){
 				tmp[i++] = id ;
 				if(i==GUIDS_CHUNK){
 					p_guids =(be64_t *)realloc(p_guids,(count_guids+GUIDS_CHUNK)*sizeof(be64_t));
@@ -261,11 +261,26 @@ static int run_pr_calculation(struct input_prm* p_prm)
 			}
 		}
 	}
+
+	{
+		size_t i = 0;
+		for (i = 0; i < count_guids; i++) {
+			be64_t guid = p_guids[i];
+			ssa_pr_status_t res = SSA_PR_SUCCESS ;
+
+			printf("Input guid: host order -  0x%-16"PRIx64" network order - 0x%-16"PRIx64"\n",ntohll(guid),guid);	
+			res = ssa_pr_half_world(p_db_diff,guid,NULL,NULL);
+			if(SSA_PR_SUCCESS != res){
+				fprintf(stderr,"Path record algorithm is failed. Input guid: host order -  0x%"PRIx64" network order - 0x%"PRIx64,ntohll(guid),guid);
+				goto Exit;
+			}
+		}
+	}
 	/*
 		   if(p_prm->guid){
 		   ssa_pr_status_t res = ssa_pr_half_world(p_db_diff,p_prm->guid,NULL);
 		   if(SSA_PR_SUCCESS != res){
-		   fprintf(stderr,"Path record algorithm is failed. Input guid: host oreder -  0x"PRIx64" network order - 0x"PRIx64,ntohll(p_prm->guid),p_prm->guid);
+		   fprintf(stderr,"Path record algorithm is failed. Input guid: host order -  0x%"PRIx64" network order - 0x%"PRIx64,ntohll(p_prm->guid),p_prm->guid);
 		   goto Exit;
 		   }
 		   */

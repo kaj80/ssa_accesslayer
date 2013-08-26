@@ -72,6 +72,7 @@ pr_pair_LDFLAGS = $(DEPS_LIBS) -L$(OSM_DBHELPER_PATH)\.libs -lssadbhelper \
 									-L$(libdir) -lssa \
 									-L$(exec_prefix)\local\lib \
 									-losmcomp -lopensm -losmvendor  -libumad \
-									-lpthread 
-									-L..\..\..\.libs -lssaacesslayer
+									-lpthread \
+									-L../../.libs -lssaaccesslayer \
+									-lm
 
