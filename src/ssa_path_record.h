@@ -38,6 +38,8 @@
 #include <byteswap.h>
 #include <infiniband/umad.h>
 
+#define SSA_ACCESS_LAYER_OUTPUT_FILE "ssa_access_layer.log"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -68,6 +70,25 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 		be64_t port_guid,
 		ssa_pr_path_dump_t dump_clbk,
 		void* clbk_prm);
+
+/* TODO: remove after migration with SSA framework */
+enum {
+	SSA_LOG_DEFAULT     = 1 << 0,
+	SSA_LOG_VERBOSE     = 1 << 1,
+	SSA_LOG_CTRL        = 1 << 2,
+	SSA_LOG_DB      = 1 << 3,
+	SSA_LOG_COMM        = 1 << 4,
+	SSA_LOG_ALL     = 0xFFFFFFFF,
+};
+
+
+extern FILE *flog1;
+int  ssa_open_log1(char *log_file);
+void ssa_close_log1(void);
+void ssa_write_log1(int level, const char *format, ...);
+#define ssa_log(level, format, ...) \
+	ssa_write_log1(level, "%s: "format, __func__, ## __VA_ARGS__)
+
 
 #ifdef __cplusplus
 }

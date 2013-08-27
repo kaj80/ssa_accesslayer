@@ -36,6 +36,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <stdarg.h>
 #include <ssa_smdb.h>
 #include "ssa_path_record.h"
 
@@ -43,6 +44,9 @@
 #define MAX(X,Y) ((X) > (Y) ?  (X) : (Y))
 
 #define MAX_HOPS 64
+
+FILE *flog1 = NULL;
+
 
 static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smdb,
 		const struct ep_guid_to_lid_tbl_rec *p_source_rec,
@@ -242,12 +246,18 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 	const struct ep_port_tbl_rec *dest_port = NULL ;
 	const struct ep_port_tbl_rec *port = NULL ;
 
-	p_path_prm->mtu = p_path_prm->rate = p_path_prm->pkt_life = p_path_prm->hops = 0;
+	p_path_prm->mtu = 0 ;
+	p_path_prm->rate = 0 ;
+	p_path_prm->pkt_life = 0 ;
+	p_path_prm->hops = 0;
+
+	ssa_log(SSA_LOG_VERBOSE,"Compute path: (%"SCNu16") - (%"SCNu16")\n",htons(p_source_rec->lid),htons(p_dest_rec->lid));
 
 	if(p_source_rec->is_switch){
 		source_port_num = find_destination_port(p_ssa_db_smdb,p_source_rec->lid,p_dest_rec->lid);
+		ssa_log(SSA_LOG_VERBOSE,"Source %"SCNu16" is switch. Destination port is: %d\n",htons(p_source_rec->lid),source_port_num);
 		if(source_port_num < 0){
-			fprintf(stderr,"Error: Destination port is not found. Switch lid:%"SCNu16" , Destination lid:%"SCNu16"\n",
+			ssa_log(SSA_LOG_VERBOSE,"Error: Destination port is not found. Switch lid:%"SCNu16" , Destination lid:%"SCNu16"\n",
 					htons(p_source_rec->lid),htons(p_dest_rec->lid));
 			return SSA_PR_ERROR;
 		}
@@ -258,6 +268,9 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 	source_port = find_port(p_ssa_db_smdb,p_source_rec->lid,source_port_num);
 	dest_port = find_port(p_ssa_db_smdb,p_dest_rec->lid,dest_port_num);
 
+	ssa_log(SSA_LOG_VERBOSE,"Source: (%"SCNu16",%d) -  Destination: (%"SCNu16",%d)\n",htons(source_port->port_lid),source_port->port_num,
+			htons(dest_port->port_lid),dest_port->port_num);
+
 	p_path_prm->pkt_life = source_port == dest_port ? 0 : p_ssa_db_smdb->subnet_timeout;
 	p_path_prm->mtu = source_port->neighbor_mtu;
 	/* TODO : p_path_prm->rate = source_port->rate;*/
@@ -265,34 +278,97 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 	port = source_port;
 	while( port != dest_port){
 		const struct ep_link_tbl_rec* link_rec = find_link(p_ssa_db_smdb,port->port_lid,port->port_num);
-		const struct ep_guid_to_lid_tbl_rec *guid_to_lid_rec = find_guid_to_lid_rec_by_lid(p_ssa_db_smdb,link_rec->to_lid);
+		//const struct ep_guid_to_lid_tbl_rec *guid_to_lid_rec = find_guid_to_lid_rec_by_lid(p_ssa_db_smdb,link_rec->to_lid);
 		int outgoing_port_num = -1 ;
 
-		if(NULL == link_rec || NULL == guid_to_lid_rec)
+
+		ssa_log(SSA_LOG_VERBOSE,"Current port: (%"SCNu16",%d)\n",htons(port->port_lid),port->port_num);
+
+		if(NULL == link_rec/* || NULL == guid_to_lid_rec*/){
+			ssa_log(SSA_LOG_VERBOSE,"Error: Link record is not found\n");
 			return SSA_PR_ERROR;
+		}
+
+		ssa_log(SSA_LOG_VERBOSE,"Link: (%"SCNu16",%d) - (%"SCNu16",%d)\n",htons(link_rec->from_lid),link_rec->from_port_num,
+			htons(link_rec->to_lid),link_rec->to_port_num);
 
 		port = find_port(p_ssa_db_smdb,link_rec->to_lid,link_rec->to_port_num);
-		if(port == dest_port)
-			break;
-
-		if(!guid_to_lid_rec->is_switch)
+		if(NULL == port){
+			ssa_log(SSA_LOG_VERBOSE,"Error: Port is not found. lid:%"SCNu16" , port num:%u\n",
+					htons(link_rec->to_lid),link_rec->to_port_num);
 			return SSA_PR_ERROR;
+		}
+
+		if(port == dest_port){
+			ssa_log(SSA_LOG_VERBOSE,"Destination port is reached\n");
+			break;
+		}
+
+		//if(!guid_to_lid_rec->is_switch)
+		//	return SSA_PR_ERROR;
+		if(!(port->rate & SSA_DB_PORT_IS_SWITCH_MASK)){
+			ssa_log(SSA_LOG_VERBOSE,"Error: Next port is not switch\n");
+			return SSA_PR_ERROR;
+		}	
 
 		p_path_prm->mtu = MIN(p_path_prm->mtu,port->neighbor_mtu);
-		/* TODO: p_path_prm->rate = MIN(p_path_prm->rate,port->rate);*/
+		p_path_prm->rate = MIN(p_path_prm->rate,port->rate & SSA_DB_PORT_RATE_MASK);
 
 		outgoing_port_num  = find_destination_port(p_ssa_db_smdb,link_rec->to_lid,p_dest_rec->lid);
+		ssa_log(SSA_LOG_VERBOSE,"Outgoing port num:%u\n",outgoing_port_num);
+
 		port = find_port(p_ssa_db_smdb,link_rec->to_lid,outgoing_port_num);
+		ssa_log(SSA_LOG_VERBOSE,"Outgoing port. lid:  lid:%"SCNu16" , port num:%u\n", htons(port->port_lid),port->port_num);
+
 
 		p_path_prm->mtu = MIN(p_path_prm->mtu,port->neighbor_mtu);
-		/* TODO: p_path_prm->rate = MIN(p_path_prm->rate,port->rate);*/
+		p_path_prm->rate = MIN(p_path_prm->rate,port->rate & SSA_DB_PORT_RATE_MASK);
 		p_path_prm->hops++;
 
-		if (p_path_prm->hops > MAX_HOPS)
-			return SSA_PR_ERROR;
+		if (p_path_prm->hops > MAX_HOPS){
+			ssa_log(SSA_LOG_VERBOSE,"Error: Max hops number is reached. %d\n",MAX_HOPS);
+			return SSA_PR_ERROR;	
+		}
 	}
 
-	return SSA_PR_ERROR;
+	ssa_log(SSA_LOG_VERBOSE,"Path: mtu:%u rate:%u hops:%u \n",p_path_prm->mtu,p_path_prm->rate,p_path_prm->hops);
+
+	return SSA_PR_SUCCESS;
 }
 
+int  ssa_open_log1(char *log_file)
+{
+	char buffer[256];
+
+	if(flog1)
+		return 0;
+
+	sprintf(buffer, "%s/%s",".", log_file);
+	flog1 = fopen(buffer, "w");
+	if (!(flog1)) {
+		fprintf(stderr, 
+				"SSA Access Layer: Failed to open output file \"%s\"\n",
+				buffer);
+		return -1;
+	}
+	return 0;
+}
+
+void ssa_close_log1(void)
+{
+	fclose(flog1);
+	flog1 = NULL ;
+}
+
+void ssa_write_log1(int level, const char *format, ...)
+{
+	va_list args;
+	char buffer[256];
+
+	va_start(args, format);
+	vsprintf(buffer, format, args);
+	fprintf_log(flog1, buffer);
+	fflush(flog1);
+	va_end(args);
+}
 

@@ -184,6 +184,11 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	be64_t *p_guids = NULL;
 	size_t count_guids = 0;
 
+	if(ssa_open_log1(SSA_ACCESS_LAYER_OUTPUT_FILE)){
+		fprintf(stderr,"Can't open log file: %s\n",SSA_ACCESS_LAYER_OUTPUT_FILE);
+		return -1;
+	}
+
 	if(strlen(p_prm->dump_path)>0){
 		fd_dump = fopen(p_prm->dump_path,"w");
 		if(!fd_dump){
@@ -268,10 +273,10 @@ static int run_pr_calculation(struct input_prm* p_prm)
 			be64_t guid = p_guids[i];
 			ssa_pr_status_t res = SSA_PR_SUCCESS ;
 
-			printf("Input guid: host order -  0x%-16"PRIx64" network order - 0x%-16"PRIx64"\n",ntohll(guid),guid);	
+			ssa_log(SSA_LOG_ALL,"Input guid: host order -  0x%-16"PRIx64" network order - 0x%-16"PRIx64"\n",ntohll(guid),guid);	
 			res = ssa_pr_half_world(p_db_diff,guid,NULL,NULL);
 			if(SSA_PR_SUCCESS != res){
-				fprintf(stderr,"Path record algorithm is failed. Input guid: host order -  0x%"PRIx64" network order - 0x%"PRIx64,ntohll(guid),guid);
+				fprintf(stderr,"Path record algorithm is failed. Input guid: host order -  0x%"PRIx64" network order - 0x%\n"PRIx64,ntohll(guid),guid);
 				goto Exit;
 			}
 		}
@@ -300,6 +305,7 @@ if(NULL!=p_guids){
 	free(p_guids);
 	p_guids = NULL;
 }
+ssa_close_log1();
 return 0;
 }
 
