@@ -44,6 +44,7 @@
 #define MAX(X,Y) ((X) > (Y) ?  (X) : (Y))
 
 #define MAX_HOPS 64
+#define LFT_NO_PATH 255
 
 FILE *flog1 = NULL;
 
@@ -129,7 +130,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 	unsigned int source_lids_count = 0;
 	uint16_t source_base_lid = 0;
 	uint16_t source_last_lid = 0;
-	
+	uint16_t source_lid = 0;
 
 	p_source_rec = find_guid_to_lid_rec_by_guid(p_ssa_db_smdb,port_guid);
 
@@ -141,46 +142,60 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 	source_last_lid = source_base_lid + pow(2,p_source_rec->lmc) -1;
 
 
-	for (i = 0; i < guid_to_lid_count; i++) {
-		uint16_t dest_base_lid = 0;
-		uint16_t dest_last_lid = 0;
-		uint16_t source_lid = 0, dest_lid = 0;
+	for(source_lid = source_base_lid ; source_lid<=source_last_lid; ++source_lid){
+		ssa_log(SSA_LOG_VERBOSE,"%s 0x%"PRIx64", base LID %"SCNu16"\n",!p_source_rec->is_switch?"Channel Adapter":"Switch",
+				port_guid,source_lid);
+		ssa_log(SSA_LOG_VERBOSE,"# LID  : SL : MTU : RATE\n");
+		for (i = 0; i < guid_to_lid_count; i++) {
+			uint16_t dest_base_lid = 0;
+			uint16_t dest_last_lid = 0;
+			uint16_t dest_lid = 0;
 
-		const struct ep_guid_to_lid_tbl_rec* p_dest_rec = p_guid_to_lid_tbl+i;
-		dest_base_lid = ntohs(p_dest_rec->lid);
-		dest_last_lid = dest_base_lid + pow(2, p_dest_rec->lmc) - 1;
+			const struct ep_guid_to_lid_tbl_rec* p_dest_rec = p_guid_to_lid_tbl+i;
+			dest_base_lid = ntohs(p_dest_rec->lid);
+			dest_last_lid = dest_base_lid + pow(2, p_dest_rec->lmc) - 1;
 
-		for(source_lid = source_base_lid ; source_lid<=source_last_lid; ++source_lid){
 			for(dest_lid = dest_base_lid ; dest_lid<=dest_last_lid; ++dest_lid){
 				ssa_path_parms_t path_prm;
+				ssa_pr_status_t path_res = SSA_PR_SUCCESS;
 
 				path_prm.from_guid = port_guid; 
 				path_prm.from_lid = htons(source_lid); 
 				path_prm.to_guid = p_dest_rec->guid;
 				path_prm.to_lid = htons(dest_lid);
 
-				if(SSA_PR_SUCCESS == ssa_pr_path_params(p_ssa_db_smdb,p_source_rec,p_dest_rec,&path_prm)){
+				path_res = ssa_pr_path_params(p_ssa_db_smdb,p_source_rec,p_dest_rec,&path_prm);
+				if(SSA_PR_SUCCESS == path_res ){
 					ssa_path_parms_t revers_path_prm;
+					ssa_pr_status_t revers_path_res = SSA_PR_SUCCESS;
 
 					revers_path_prm.from_guid = path_prm.to_guid;
 					revers_path_prm.from_lid = path_prm.to_lid; 
 					revers_path_prm.to_guid = path_prm.from_guid;
 					revers_path_prm.to_lid = path_prm.from_lid;
 
-					ssa_pr_status_t revers_path_res = ssa_pr_path_params(p_ssa_db_smdb,p_dest_rec,p_source_rec,&revers_path_prm) ;
+					revers_path_res = ssa_pr_path_params(p_ssa_db_smdb,p_dest_rec,p_source_rec,&revers_path_prm) ;
 
-					path_prm.reversible = SSA_PR_SUCCESS == revers_path_res ;
+					if(SSA_PR_ERROR == revers_path_res)
+						ssa_log(SSA_LOG_VERBOSE,"Error. Path calculation is failed. Source LID 0x%"SCNu16" Destination LID: 0x%"SCNu16"\n",source_lid,dest_lid );
+					else
+						path_prm.reversible = SSA_PR_SUCCESS == revers_path_res ;
+					
+					ssa_log(SSA_LOG_VERBOSE,"0x%"SCNu16" : %u : %u : %u\n",source_lid, 0 , path_prm.mtu, path_prm.rate);
+
 					if(NULL!=dump_clbk)
 						dump_clbk(&path_prm,clbk_prm);
-				}
+				}else if(SSA_PR_ERROR == path_res)
+					ssa_log(SSA_LOG_VERBOSE,"Path record calucation is failed. Source LID: %"SCNu16", dest LID: %"SCNu16"\n"); 
+				
 			}
 		}
 	}
 }
 										
 static int find_destination_port(const struct ssa_db_smdb* p_ssa_db_smdb,
-		const uint16_t source_lid,
-		const uint16_t dest_lid)
+		const be16_t source_lid,
+		const be16_t dest_lid)
 {
 	size_t i =0;
 
@@ -192,21 +207,27 @@ static int find_destination_port(const struct ssa_db_smdb* p_ssa_db_smdb,
 		(struct ep_lft_block_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LFT_BLOCK];
 	const size_t lft_block_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LFT_BLOCK);
 
-	const size_t lft_block_num = floorl(dest_lid/IB_SMP_DATA_SIZE);
-	const size_t lft_port_num = dest_lid%IB_SMP_DATA_SIZE;
+	const size_t lft_block_num = floorl(ntohs(dest_lid)/IB_SMP_DATA_SIZE);
+	const size_t lft_port_num = ntohs(dest_lid)%IB_SMP_DATA_SIZE;
 
-	for (i = 0; i < lft_top_count && source_lid !=ntohs(p_lft_top_tbl[i].lid) ; i++);
+//	ssa_log(SSA_LOG_VERBOSE,"Source lid: %"SCNx16" Destination lid: %"SCNx16" lft block num: %u lft port num: %u\n",
+//			source_lid,dest_lid,lft_block_num,lft_port_num);
+
+	for (i = 0; i < lft_top_count && source_lid !=p_lft_top_tbl[i].lid ; i++);
 	if(i >= lft_top_count || dest_lid > p_lft_top_tbl[i].lft_top){
-		/*
-		 * Report error
-		 */
+		ssa_log(SSA_LOG_VERBOSE,"Error: Source lid: %"SCNx16" Destination lid: %"SCNx16" Current lft top block index: %u top lid in the block: %u\n",
+			source_lid,i,p_lft_top_tbl[i].lft_top);
 		return -1;
 	}
 
-	for (i = 0; i < lft_block_count && source_lid != ntohs(p_lft_block_tbl[i].lid) && 
-			lft_block_num != ntohs(p_lft_block_tbl[i].block_num); i++);
+	for (i = 0; i < lft_block_count;++i ) 
+		if(source_lid == p_lft_block_tbl[i].lid && lft_block_num == p_lft_block_tbl[i].block_num)
+			return p_lft_block_tbl[i].block[lft_port_num];
 
-	return i < lft_block_count ? p_lft_block_tbl[i].block[lft_port_num] : -1;
+	ssa_log(SSA_LOG_VERBOSE,"Path not found.  Switch lid: %"SCNx16" Destination lid: %"SCNx16" block index: %u index in  the block: %u\n",
+			source_lid,dest_lid,lft_block_num,lft_port_num);
+
+	return LFT_NO_PATH ;
 }
 
 static const struct ep_port_tbl_rec* find_port(const struct ssa_db_smdb* p_ssa_db_smdb,
@@ -218,8 +239,11 @@ static const struct ep_port_tbl_rec* find_port(const struct ssa_db_smdb* p_ssa_d
 		(const struct ep_port_tbl_rec*)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_PORT];
 	const size_t count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
 
-	for (i = 0; i < count && p_port_tbl[i].port_lid!=lid && (port_num >0 || port_num != p_port_tbl[i].port_num ); i++) ;
-	return i<count?p_port_tbl+i:NULL;
+	for (i = 0; i < count; i++){
+		if(p_port_tbl[i].port_lid==lid && (port_num<0 || port_num == p_port_tbl[i].port_num))
+			return p_port_tbl+i;
+	}
+	return NULL;
 }
 
 static const struct ep_link_tbl_rec* find_link(const struct ssa_db_smdb* p_ssa_db_smdb,
@@ -231,8 +255,11 @@ static const struct ep_link_tbl_rec* find_link(const struct ssa_db_smdb* p_ssa_d
 		(const struct ep_link_tbl_rec*)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LINK];
 	const size_t link_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LINK);
 
-	for (i = 0; i < link_count && lid!=p_link_tbl[i].from_lid && port_num != p_link_tbl[i].from_port_num; i++);
-	return i < link_count ? p_link_tbl+i : NULL;
+	for (i = 0; i < link_count; i++)
+		if(lid==p_link_tbl[i].from_lid && (port_num<0 || port_num == p_link_tbl[i].from_port_num))
+			return p_link_tbl+i;
+
+	return NULL;
 }
 
 static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smdb,
@@ -251,16 +278,19 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 	p_path_prm->pkt_life = 0 ;
 	p_path_prm->hops = 0;
 
-	ssa_log(SSA_LOG_VERBOSE,"Compute path: (%"SCNu16") - (%"SCNu16")\n",htons(p_source_rec->lid),htons(p_dest_rec->lid));
+//	ssa_log(SSA_LOG_VERBOSE,"Compute path: (0x%"SCNx16") - (0x%"SCNx16")\n",ntohs(p_source_rec->lid),ntohs(p_dest_rec->lid));
 
 	if(p_source_rec->is_switch){
 		source_port_num = find_destination_port(p_ssa_db_smdb,p_source_rec->lid,p_dest_rec->lid);
-		ssa_log(SSA_LOG_VERBOSE,"Source %"SCNu16" is switch. Destination port is: %d\n",htons(p_source_rec->lid),source_port_num);
+		ssa_log(SSA_LOG_VERBOSE,"Source %"SCNx16" is switch. Destination port is: %d\n",ntohs(p_source_rec->lid),source_port_num);
 		if(source_port_num < 0){
-			ssa_log(SSA_LOG_VERBOSE,"Error: Destination port is not found. Switch lid:%"SCNu16" , Destination lid:%"SCNu16"\n",
+			ssa_log(SSA_LOG_VERBOSE,"Error: Destination port is not found. Switch lid:%"SCNx16" , Destination lid:%"SCNx16"\n",
 					htons(p_source_rec->lid),htons(p_dest_rec->lid));
 			return SSA_PR_ERROR;
-		}
+		}else if( LFT_NO_PATH == source_port_num){
+			ssa_log(SSA_LOG_VERBOSE,"No path found. Switch LID:%"SCNu16" Destination LID:%"SCNu16" \n",htons(p_source_rec->lid),htons(p_dest_rec->lid));
+			return SSA_PR_NO_PATH;
+		}	
 	}
 
 	dest_port_num = p_dest_rec->is_switch ? 0 : -1 ;
@@ -268,33 +298,44 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 	source_port = find_port(p_ssa_db_smdb,p_source_rec->lid,source_port_num);
 	dest_port = find_port(p_ssa_db_smdb,p_dest_rec->lid,dest_port_num);
 
-	ssa_log(SSA_LOG_VERBOSE,"Source: (%"SCNu16",%d) -  Destination: (%"SCNu16",%d)\n",htons(source_port->port_lid),source_port->port_num,
-			htons(dest_port->port_lid),dest_port->port_num);
+	if(NULL == source_port){
+		ssa_log(SSA_LOG_VERBOSE,"Error: Port is not found. Switch lid:%"SCNx16"\n",htons(p_source_rec->lid));
+		return SSA_PR_ERROR;
+	}
+
+	if(NULL == dest_port){
+		ssa_log(SSA_LOG_VERBOSE,"Error: Port is not found. Switch lid:%"SCNx16"\n",htons(p_dest_rec->lid));
+		return SSA_PR_ERROR;
+	}
+
+//	ssa_log(SSA_LOG_VERBOSE,"Source: (%"SCNx16",%d) -  Destination: (%"SCNx16",%d)\n",ntohs(source_port->port_lid),source_port->port_num,
+//			ntohs(dest_port->port_lid),dest_port->port_num);
 
 	p_path_prm->pkt_life = source_port == dest_port ? 0 : p_ssa_db_smdb->subnet_timeout;
 	p_path_prm->mtu = source_port->neighbor_mtu;
-	/* TODO : p_path_prm->rate = source_port->rate;*/
+	p_path_prm->rate = source_port->rate & SSA_DB_PORT_RATE_MASK;
 
 	port = source_port;
 	while( port != dest_port){
-		const struct ep_link_tbl_rec* link_rec = find_link(p_ssa_db_smdb,port->port_lid,port->port_num);
+		const struct ep_link_tbl_rec* link_rec = find_link(p_ssa_db_smdb,port->port_lid,
+				port->rate &  SSA_DB_PORT_IS_SWITCH_MASK ? port->port_num:-1);
 		//const struct ep_guid_to_lid_tbl_rec *guid_to_lid_rec = find_guid_to_lid_rec_by_lid(p_ssa_db_smdb,link_rec->to_lid);
 		int outgoing_port_num = -1 ;
 
 
-		ssa_log(SSA_LOG_VERBOSE,"Current port: (%"SCNu16",%d)\n",htons(port->port_lid),port->port_num);
+//		ssa_log(SSA_LOG_VERBOSE,"Current port: (%"SCNx16",%d)\n",htons(port->port_lid),port->port_num);
 
 		if(NULL == link_rec/* || NULL == guid_to_lid_rec*/){
 			ssa_log(SSA_LOG_VERBOSE,"Error: Link record is not found\n");
 			return SSA_PR_ERROR;
 		}
 
-		ssa_log(SSA_LOG_VERBOSE,"Link: (%"SCNu16",%d) - (%"SCNu16",%d)\n",htons(link_rec->from_lid),link_rec->from_port_num,
-			htons(link_rec->to_lid),link_rec->to_port_num);
+//		ssa_log(SSA_LOG_VERBOSE,"Link: (%"SCNx16",%d) - (%"SCNx16",%d)\n",htons(link_rec->from_lid),link_rec->from_port_num,
+//			htons(link_rec->to_lid),link_rec->to_port_num);
 
 		port = find_port(p_ssa_db_smdb,link_rec->to_lid,link_rec->to_port_num);
 		if(NULL == port){
-			ssa_log(SSA_LOG_VERBOSE,"Error: Port is not found. lid:%"SCNu16" , port num:%u\n",
+			ssa_log(SSA_LOG_VERBOSE,"Error: Port is not found. lid:%"SCNx16" , port num:%u\n",
 					htons(link_rec->to_lid),link_rec->to_port_num);
 			return SSA_PR_ERROR;
 		}
@@ -315,10 +356,20 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 		p_path_prm->rate = MIN(p_path_prm->rate,port->rate & SSA_DB_PORT_RATE_MASK);
 
 		outgoing_port_num  = find_destination_port(p_ssa_db_smdb,link_rec->to_lid,p_dest_rec->lid);
-		ssa_log(SSA_LOG_VERBOSE,"Outgoing port num:%u\n",outgoing_port_num);
+		if( LFT_NO_PATH == outgoing_port_num){
+			ssa_log(SSA_LOG_VERBOSE,"No path found. Switch LID:%"SCNu16" Destination LID:%"SCNu16" \n",htons(link_rec->to_lid),htons(p_dest_rec->lid));
+			return SSA_PR_NO_PATH;
+		}
+
+//		ssa_log(SSA_LOG_VERBOSE,"Outgoing port num:%u\n",outgoing_port_num);
 
 		port = find_port(p_ssa_db_smdb,link_rec->to_lid,outgoing_port_num);
-		ssa_log(SSA_LOG_VERBOSE,"Outgoing port. lid:  lid:%"SCNu16" , port num:%u\n", htons(port->port_lid),port->port_num);
+		if(NULL == port){
+			ssa_log(SSA_LOG_VERBOSE,"Error: Port is not found. lid:%"SCNx16" , port num:%u\n",
+					htons(link_rec->to_lid),outgoing_port_num);
+			return SSA_PR_ERROR;
+		}
+//		ssa_log(SSA_LOG_VERBOSE,"Outgoing port. lid:  lid:%"SCNx16" , port num:%u\n", htons(port->port_lid),port->port_num);
 
 
 		p_path_prm->mtu = MIN(p_path_prm->mtu,port->neighbor_mtu);
@@ -331,20 +382,24 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 		}
 	}
 
-	ssa_log(SSA_LOG_VERBOSE,"Path: mtu:%u rate:%u hops:%u \n",p_path_prm->mtu,p_path_prm->rate,p_path_prm->hops);
+//	ssa_log(SSA_LOG_VERBOSE,"Path: mtu:%u rate:%u hops:%u \n",p_path_prm->mtu,p_path_prm->rate,p_path_prm->hops);
 
 	return SSA_PR_SUCCESS;
 }
 
 int  ssa_open_log1(char *log_file)
 {
-	char buffer[256];
+	char buffer[256]={};
 
 	if(flog1)
 		return 0;
 
+	// TODO: Remove this
+	flog1 = stdout;
+	return 0;
+
 	sprintf(buffer, "%s/%s",".", log_file);
-	flog1 = fopen(buffer, "w");
+	flog1 = fopen(buffer, "aw");
 	if (!(flog1)) {
 		fprintf(stderr, 
 				"SSA Access Layer: Failed to open output file \"%s\"\n",

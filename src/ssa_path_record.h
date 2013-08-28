@@ -46,7 +46,8 @@ extern "C" {
 
 typedef enum _ssa_pr_status_t {
     SSA_PR_SUCCESS,
-    SSA_PR_ERROR
+    SSA_PR_ERROR,
+	SSA_PR_NO_PATH
 } ssa_pr_status_t;
 
 typedef struct ssa_path_parms {

@@ -276,7 +276,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 			ssa_log(SSA_LOG_ALL,"Input guid: host order -  0x%-16"PRIx64" network order - 0x%-16"PRIx64"\n",ntohll(guid),guid);	
 			res = ssa_pr_half_world(p_db_diff,guid,NULL,NULL);
 			if(SSA_PR_SUCCESS != res){
-				fprintf(stderr,"Path record algorithm is failed. Input guid: host order -  0x%"PRIx64" network order - 0x%\n"PRIx64,ntohll(guid),guid);
+				fprintf(stderr,"Path record algorithm is failed. Input guid: host order -  0x%"PRIx64" network order - 0x%"PRIx64"\n",ntohll(guid),guid);
 				goto Exit;
 			}
 		}
