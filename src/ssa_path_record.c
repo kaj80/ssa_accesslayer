@@ -180,8 +180,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 						ssa_log(SSA_LOG_VERBOSE,"Error. Path calculation is failed. Source LID 0x%"SCNu16" Destination LID: 0x%"SCNu16"\n",source_lid,dest_lid );
 					else
 						path_prm.reversible = SSA_PR_SUCCESS == revers_path_res ;
-					
-					ssa_log(SSA_LOG_VERBOSE,"0x%"SCNu16" : %u : %u : %u\n",source_lid, 0 , path_prm.mtu, path_prm.rate);
+					ssa_log(SSA_LOG_VERBOSE,"0x%04"SCNx16" : %3u : %3u : %3u\n",dest_lid,0,path_prm.mtu,path_prm.rate);
 
 					if(NULL!=dump_clbk)
 						dump_clbk(&path_prm,clbk_prm);
@@ -191,6 +190,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 			}
 		}
 	}
+	return SSA_PR_SUCCESS;
 }
 										
 static int find_destination_port(const struct ssa_db_smdb* p_ssa_db_smdb,
@@ -221,11 +221,11 @@ static int find_destination_port(const struct ssa_db_smdb* p_ssa_db_smdb,
 	}
 
 	for (i = 0; i < lft_block_count;++i ) 
-		if(source_lid == p_lft_block_tbl[i].lid && lft_block_num == p_lft_block_tbl[i].block_num)
+		if(source_lid == p_lft_block_tbl[i].lid && lft_block_num == ntohs(p_lft_block_tbl[i].block_num))
 			return p_lft_block_tbl[i].block[lft_port_num];
 
 	ssa_log(SSA_LOG_VERBOSE,"Path not found.  Switch lid: %"SCNx16" Destination lid: %"SCNx16" block index: %u index in  the block: %u\n",
-			source_lid,dest_lid,lft_block_num,lft_port_num);
+			source_lid,dest_lid,ntohs(lft_block_num),lft_port_num);
 
 	return LFT_NO_PATH ;
 }
@@ -240,7 +240,8 @@ static const struct ep_port_tbl_rec* find_port(const struct ssa_db_smdb* p_ssa_d
 	const size_t count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
 
 	for (i = 0; i < count; i++){
-		if(p_port_tbl[i].port_lid==lid && (port_num<0 || port_num == p_port_tbl[i].port_num))
+		if(p_port_tbl[i].port_lid==lid && 
+				(!(p_port_tbl[i].rate & SSA_DB_PORT_IS_SWITCH_MASK) || port_num == p_port_tbl[i].port_num))
 			return p_port_tbl+i;
 	}
 	return NULL;
@@ -282,7 +283,7 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 
 	if(p_source_rec->is_switch){
 		source_port_num = find_destination_port(p_ssa_db_smdb,p_source_rec->lid,p_dest_rec->lid);
-		ssa_log(SSA_LOG_VERBOSE,"Source %"SCNx16" is switch. Destination port is: %d\n",ntohs(p_source_rec->lid),source_port_num);
+		//ssa_log(SSA_LOG_VERBOSE,"Source %"SCNx16" is switch. Destination port is: %d\n",ntohs(p_source_rec->lid),source_port_num);
 		if(source_port_num < 0){
 			ssa_log(SSA_LOG_VERBOSE,"Error: Destination port is not found. Switch lid:%"SCNx16" , Destination lid:%"SCNx16"\n",
 					htons(p_source_rec->lid),htons(p_dest_rec->lid));
@@ -341,7 +342,7 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 		}
 
 		if(port == dest_port){
-			ssa_log(SSA_LOG_VERBOSE,"Destination port is reached\n");
+			//ssa_log(SSA_LOG_VERBOSE,"Destination port is reached\n");
 			break;
 		}
 
