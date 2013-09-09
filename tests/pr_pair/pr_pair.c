@@ -42,6 +42,8 @@
 #include <stdint.h>
 #include <byteswap.h>
 
+#include <glib.h>
+
 #include <ssa_smdb.h>
 #include <ssa_db_helper.h>
 #include <ssa_path_record.h>
@@ -133,11 +135,61 @@ static void print_input_prm(const struct input_prm *prm)
 		printf("Compute \"whole world\" path records.\n");
 }
 
+static GPtrArray *init_pr_path_container()
+{
+	return g_ptr_array_new_with_free_func(g_free);
+}
+
+static gint path_compare(gconstpointer a,gconstpointer b)
+{
+	ssa_path_parms_t *p_path_a =*(ssa_path_parms_t **)a;
+	ssa_path_parms_t *p_path_b =*(ssa_path_parms_t **)b;
+
+	uint16_t from_lid_a = ntohs(p_path_a->from_lid);
+	uint16_t from_lid_b = ntohs(p_path_b->from_lid);
+	uint16_t to_lid_a = ntohs(p_path_a->to_lid);
+	uint16_t to_lid_b = ntohs(p_path_b->to_lid);
+
+	if(from_lid_a<from_lid_b)
+		return -1;
+	else if(from_lid_a > from_lid_b)
+		return 1;
+	else if(to_lid_a < to_lid_b)
+		return -1;
+	else if(to_lid_a > to_lid_b)
+		return 1;
+	else 
+		return 0;
+}
+
+static void dump_pr(const GPtrArray* path_arr,FILE* fd)
+{
+	guint i = 0;
+	uint16_t prev_lid = 0 ;
+
+	g_ptr_array_sort(path_arr,path_compare);
+
+	for (i = 0; i < path_arr->len; i++) {
+		ssa_path_parms_t *p_path_prm = g_ptr_array_index(path_arr,i);
+
+		if(prev_lid != p_path_prm->from_lid){
+			prev_lid = p_path_prm->from_lid;
+			fprintf(fd,"# LID  : SL : MTU : RATE\n");
+		}
+		fprintf(fd,"0x%04"SCNu16" : %3u : %3u : %3u\n",ntohs(p_path_prm->to_lid),0,p_path_prm->mtu,p_path_prm->rate);
+	}
+}
+
 static void ssa_pr_path_output(const ssa_path_parms_t *p_path_prm, void *prm)
 {
-	FILE *fd = (FILE*)prm;
-	fprintf(fd,"0x%"SCNu16" : %3u : %3u : %3u\n",p_path_prm->to_lid,0,p_path_prm->mtu,p_path_prm->rate);
 
+	ssa_path_parms_t *p_my_path = NULL ;
+	GPtrArray* path_arr = (GPtrArray *)prm;
+
+	p_my_path =  (void*)g_malloc(sizeof *p_my_path);
+
+	memcpy(p_my_path,p_path_prm,sizeof(*p_my_path));
+	g_ptr_array_add(path_arr,p_my_path);
 }
 
 static struct ssa_db_smdb * load_smdb(const char* path)
@@ -183,6 +235,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	struct ssa_db_smdb * p_db_diff = NULL ;
 	be64_t *p_guids = NULL;
 	size_t count_guids = 0;
+	GPtrArray *path_arr = NULL;
 
 	if(ssa_open_log1(SSA_ACCESS_LAYER_OUTPUT_FILE)){
 		fprintf(stderr,"Can't open log file: %s\n",SSA_ACCESS_LAYER_OUTPUT_FILE);
@@ -269,17 +322,26 @@ static int run_pr_calculation(struct input_prm* p_prm)
 
 	{
 		size_t i = 0;
+
+		path_arr = init_pr_path_container();
+		if(NULL == path_arr){
+			fprintf(stderr,"Can't create a Glib array\n");
+			goto Exit;
+		}
+
 		for (i = 0; i < count_guids; i++) {
 			be64_t guid = p_guids[i];
 			ssa_pr_status_t res = SSA_PR_SUCCESS ;
 
 			ssa_log(SSA_LOG_ALL,"Input guid: host order -  0x%-16"PRIx64" network order - 0x%-16"PRIx64"\n",ntohll(guid),guid);	
-			res = ssa_pr_half_world(p_db_diff,guid,NULL,NULL);
+			res = ssa_pr_half_world(p_db_diff,guid,ssa_pr_path_output,path_arr);
 			if(SSA_PR_SUCCESS != res){
 				fprintf(stderr,"Path record algorithm is failed. Input guid: host order -  0x%"PRIx64" network order - 0x%"PRIx64"\n",ntohll(guid),guid);
 				goto Exit;
 			}
+			dump_pr(path_arr,stdout);
 		}
+
 	}
 	/*
 		   if(p_prm->guid){
@@ -304,6 +366,10 @@ if(fd_input){
 if(NULL!=p_guids){
 	free(p_guids);
 	p_guids = NULL;
+}
+if(NULL!=path_arr){
+	g_ptr_array_free (path_arr, TRUE);
+	path_arr = NULL;
 }
 ssa_close_log1();
 return 0;

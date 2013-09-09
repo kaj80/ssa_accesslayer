@@ -46,7 +46,7 @@ AM_CPPFLAGS = $(DBG) -Wall -Werror -g
 
 COV =
 if COVERAGE
-AM_CPPFLAGS += -fprofile-arcs -ftest-coverage
+AM_CPPFLAGS += -fprofile-arcs -ftest-coverage -I config
 COV += -lgcov
 endif
 

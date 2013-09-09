@@ -145,7 +145,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 	for(source_lid = source_base_lid ; source_lid<=source_last_lid; ++source_lid){
 		ssa_log(SSA_LOG_VERBOSE,"%s 0x%"PRIx64", base LID %"SCNu16"\n",!p_source_rec->is_switch?"Channel Adapter":"Switch",
 				port_guid,source_lid);
-		ssa_log(SSA_LOG_VERBOSE,"# LID  : SL : MTU : RATE\n");
+		//ssa_log(SSA_LOG_VERBOSE,"# LID  : SL : MTU : RATE\n");
 		for (i = 0; i < guid_to_lid_count; i++) {
 			uint16_t dest_base_lid = 0;
 			uint16_t dest_last_lid = 0;
@@ -180,7 +180,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 						ssa_log(SSA_LOG_VERBOSE,"Error. Path calculation is failed. Source LID 0x%"SCNu16" Destination LID: 0x%"SCNu16"\n",source_lid,dest_lid );
 					else
 						path_prm.reversible = SSA_PR_SUCCESS == revers_path_res ;
-					ssa_log(SSA_LOG_VERBOSE,"0x%04"SCNx16" : %3u : %3u : %3u\n",dest_lid,0,path_prm.mtu,path_prm.rate);
+					//ssa_log(SSA_LOG_VERBOSE,"0x%04"SCNx16" : %3u : %3u : %3u\n",dest_lid,0,path_prm.mtu,path_prm.rate);
 
 					if(NULL!=dump_clbk)
 						dump_clbk(&path_prm,clbk_prm);
