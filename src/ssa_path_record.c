@@ -37,6 +37,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdarg.h>
+#include <assert.h>
 #include <ssa_smdb.h>
 #include "ssa_path_record.h"
 
@@ -55,37 +56,13 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb* p_ssa_db_smd
 		ssa_path_parms_t* p_path_prm);
 
 
-static size_t get_dataset_count(const struct ssa_db_smdb* p_ssa_db_smdb,
+inline static size_t get_dataset_count(const struct ssa_db_smdb* p_ssa_db_smdb,
 		unsigned int table_id)
 {
-	const struct db_dataset *p_dataset = &p_ssa_db_smdb->db_tables[table_id];
-	return ntohll(p_dataset->set_count);
+	assert( p_ssa_db_smdb && table_id < SSA_TABLE_ID_MAX && 
+			&p_ssa_db_smdb->db_tables[table_id]);
+	return ntohll(p_ssa_db_smdb->db_tables[table_id].set_count);
 }
-/*
-typedef int record_cmp(const void*,const void*);
-static void* find_record(const struct ssa_db_smdb* p_ssa_db_smdb,
-		const unsigned int table_id,
-		const size_t record_size,
-		record_cmp cmp,
-		const void* prm)
-{
-	size_t i =0 ;
-	const size_t count = get_dataset_count(p_ssa_db_smdb,table_id);
-
-	for (i = 0; i < count; i++) {
-		if(cmp(p_ssa_db_smdb->p_tables[table_id]+count*record_size,prm))
-			return p_ssa_db_smdb->p_tables[table_id]+count*record_size;
-	}
-	return NULL;
-}
-
-static int node_guid_cmp(const void* record, const void* prm)
-{
-	struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl = 
-		(ep_guid_to_lid_tbl_rec*)record;
-	return ntohs(record->guid) == *(uint64_t*)prm; 
-}
-*/
 
 static const struct ep_guid_to_lid_tbl_rec* find_guid_to_lid_rec_by_guid(const struct ssa_db_smdb* p_ssa_db_smdb,
 		const be64_t port_guid)
@@ -102,20 +79,6 @@ static const struct ep_guid_to_lid_tbl_rec* find_guid_to_lid_rec_by_guid(const s
 	return NULL;
 }
 
-static const struct ep_guid_to_lid_tbl_rec* find_guid_to_lid_rec_by_lid(const struct ssa_db_smdb* p_ssa_db_smdb,
-		const be16_t base_lid)
-{
-	size_t i =0;
-	const struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl = 
-		(struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
-	const size_t count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
-
-	for (i = 0; i < count; i++) {
-		if (base_lid == p_guid_to_lid_tbl[i].lid) 
-			return p_guid_to_lid_tbl+i;
-	}
-	return NULL;
-}
 
 ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb, 
 		be64_t port_guid,
@@ -145,7 +108,6 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 	for(source_lid = source_base_lid ; source_lid<=source_last_lid; ++source_lid){
 		ssa_log(SSA_LOG_VERBOSE,"%s 0x%"PRIx64", base LID %"SCNu16"\n",!p_source_rec->is_switch?"Channel Adapter":"Switch",
 				port_guid,source_lid);
-		//ssa_log(SSA_LOG_VERBOSE,"# LID  : SL : MTU : RATE\n");
 		for (i = 0; i < guid_to_lid_count; i++) {
 			uint16_t dest_base_lid = 0;
 			uint16_t dest_last_lid = 0;
@@ -180,7 +142,6 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 						ssa_log(SSA_LOG_VERBOSE,"Error. Path calculation is failed. Source LID 0x%"SCNu16" Destination LID: 0x%"SCNu16"\n",source_lid,dest_lid );
 					else
 						path_prm.reversible = SSA_PR_SUCCESS == revers_path_res ;
-					//ssa_log(SSA_LOG_VERBOSE,"0x%04"SCNx16" : %3u : %3u : %3u\n",dest_lid,0,path_prm.mtu,path_prm.rate);
 
 					if(NULL!=dump_clbk)
 						dump_clbk(&path_prm,clbk_prm);
@@ -210,8 +171,6 @@ static int find_destination_port(const struct ssa_db_smdb* p_ssa_db_smdb,
 	const size_t lft_block_num = floorl(ntohs(dest_lid)/IB_SMP_DATA_SIZE);
 	const size_t lft_port_num = ntohs(dest_lid)%IB_SMP_DATA_SIZE;
 
-//	ssa_log(SSA_LOG_VERBOSE,"Source lid: %"SCNx16" Destination lid: %"SCNx16" lft block num: %u lft port num: %u\n",
-//			source_lid,dest_lid,lft_block_num,lft_port_num);
 
 	for (i = 0; i < lft_top_count && source_lid !=p_lft_top_tbl[i].lid ; i++);
 	if(i >= lft_top_count || dest_lid > p_lft_top_tbl[i].lft_top){
