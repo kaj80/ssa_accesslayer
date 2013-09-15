@@ -135,7 +135,10 @@ static void print_input_prm(const struct input_prm *prm)
 			printf("Input LID: 0x%"PRIx16"\n",prm->id);
 			return;
 		}
+	} else if(strlen(prm->input_path)) {
+		printf("Input file with IDs: %s\n",prm->input_path);
 	}
+
 	if(prm->whole_world) {
 		printf("Compute \"whole world\" path records.\n");
 		return;
@@ -276,7 +279,7 @@ static size_t read_ids_from_file(const char *path, GArray *arr)
 		goto Exit;
 	}
 
-	while(1 == fscanf(fd,"0x%"PRIx64"",&id)) {
+	while(1 == fscanf(fd,"0x%"PRIx64"\n",&id)) {
 		g_array_append_val(arr,id);
 		count++;
 	}	
@@ -301,7 +304,8 @@ static void remove_duplicates(GArray *p_arr)
 			g_array_index(p_arr,uint64_t,++last) = v_i;
 	}
 
-	g_array_remove_range(p_arr,last,i-last);
+	if(last <p_arr->len - 1)
+		g_array_remove_range(p_arr,last+1,p_arr->len - last -1);
 }
 
 static int compare_ints(uint64_t a,uint64_t b)
@@ -400,10 +404,10 @@ static int run_pr_calculation(struct input_prm* p_prm)
 		be64_t guid = htonll(g_array_index(guids_arr,uint64_t,i));
 		ssa_pr_status_t res = SSA_PR_SUCCESS;
 
-		ssa_log(SSA_LOG_ALL,"Input guid: 0x%-16"PRIx64"\n",ntohll(guid));	
+		ssa_log(SSA_LOG_ALL,"Input guid: 0x%016"PRIx64"\n",ntohll(guid));	
 		res = ssa_pr_half_world(p_db_diff,guid,ssa_pr_path_output,path_arr);
 		if(SSA_PR_SUCCESS != res) {
-			fprintf(stderr,"Path record algorithm is failed. Input guid: host order -  0x%"PRIx64" network order - 0x%"PRIx64"\n",ntohll(guid),guid);
+			fprintf(stderr,"Path record algorithm is failed. Input guid: 0x016%"PRIx64"\n",ntohll(guid));
 			res = -1;
 			goto Exit;
 		}
@@ -478,6 +482,7 @@ int main(int argc,char *argv[])
 			case 'f':
 				use_file_opt = 1;
 				err_opt = use_single_id_opt || use_all_opt;
+				strncpy(input_path,optarg,PATH_MAX);
 				break;
 			case 'l':
 				use_lid_opt = 1;
@@ -565,8 +570,8 @@ int main(int argc,char *argv[])
 	}
 
 	if(use_file_opt)
-		if(!is_dir_exist(input_path)) {
-			fprintf(stderr,"Directory does not exist: %s\n",input_path);
+		if(!is_file_exist(input_path)) {
+			fprintf(stderr,"File does not exist: %s\n",input_path);
 			print_usage(stderr,argv[0]);
 			exit(EXIT_FAILURE);
 		} else {

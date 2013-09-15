@@ -106,8 +106,8 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb,
 
 
 	for(source_lid = source_base_lid ; source_lid<=source_last_lid; ++source_lid){
-		ssa_log(SSA_LOG_VERBOSE,"%s 0x%"PRIx64", base LID %"SCNu16"\n",!p_source_rec->is_switch?"Channel Adapter":"Switch",
-				port_guid,source_lid);
+		ssa_log(SSA_LOG_VERBOSE,"%s 0x%016"PRIx64", base LID %"SCNu16"\n",!p_source_rec->is_switch?"Channel Adapter":"Switch",
+				ntohll(port_guid),ntohs(source_lid));
 		for (i = 0; i < guid_to_lid_count; i++) {
 			uint16_t dest_base_lid = 0;
 			uint16_t dest_last_lid = 0;
