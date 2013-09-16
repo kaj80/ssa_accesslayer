@@ -221,8 +221,9 @@ static void dump_pr(GPtrArray *path_arr,struct ssa_db_smdb *p_smdb,FILE *fd)
 					ntohll(p_guid_to_lid_rec->guid),ntohs(p_guid_to_lid_rec->lid),p_port_rec->port_num);
 			fprintf(fd,"# LID  : SL : MTU : RATE\n");
 		}
-		fprintf(fd,"0x%04"SCNx16" : %3u : %3u : %3u\n",ntohs(p_path_prm->to_lid),0,p_path_prm->mtu,p_path_prm->rate);
+		fprintf(fd,"0x%04X"" : %-2d : %-3d : %-4d\n",ntohs(p_path_prm->to_lid),0,p_path_prm->mtu,p_path_prm->rate);
 	}
+	fprintf(fd,"\n");
 }
 
 static void ssa_pr_path_output(const ssa_path_parms_t *p_path_prm, void *prm)
