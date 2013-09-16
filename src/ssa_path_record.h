@@ -84,7 +84,7 @@ enum {
 
 
 extern FILE *flog1;
-int  ssa_open_log1(char *log_file);
+int  ssa_open_log1(const char *log_file);
 void ssa_close_log1(void);
 void ssa_write_log1(int level, const char *format, ...);
 #define ssa_log(level, format, ...) \
