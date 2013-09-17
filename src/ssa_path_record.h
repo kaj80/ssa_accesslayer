@@ -40,6 +40,12 @@
 
 #define SSA_ACCESS_LAYER_OUTPUT_FILE "ssa_access_layer.log"
 
+#if defined (_DEBUG_)
+#define SSA_ASSERT	assert
+#else				/* _DEBUG_ */
+#define SSA_ASSERT( __exp__ )
+#endif				/* _DEBUG_ */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
