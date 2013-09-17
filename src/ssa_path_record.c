@@ -48,7 +48,7 @@
 #define LFT_NO_PATH 255
 
 FILE *flog1 = NULL;
-
+int ssa_pr_log_level = SSA_PR_EEROR_LEVEL  ;
 
 static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smdb,
 		const struct ep_guid_to_lid_tbl_rec *p_source_rec,
@@ -434,4 +434,29 @@ void ssa_write_log1(int level, const char *format, ...)
 	fprintf_log(flog1, buffer);
 	fflush(flog1);
 	va_end(args);
+}
+void ssa_write_log2(const char *format, ...)
+{
+	va_list args;
+	char buffer[256];
+
+	va_start(args, format);
+	vsprintf(buffer, format, args);
+	fprintf_log(stderr, buffer);
+	fflush(flog1);
+	va_end(args);
+}
+
+const char* get_time()
+{
+	static char buffer[64] = {};
+	time_t rawtime;
+	struct tm *timeinfo;
+
+	time(&rawtime);
+	timeinfo = localtime(&rawtime);
+
+	strftime(buffer, 64, "%Y-%m-%d %H:%M:%S", timeinfo);
+
+	return buffer;
 }

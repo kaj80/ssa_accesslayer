@@ -88,7 +88,7 @@ static int is_file_exist(const char *path)
 
 static void print_memory_usage(const char* prefix)
 {
-	char buf[30];
+	char buf[30] = {};
 	
 	snprintf(buf,30,"/proc/%u/statm",(unsigned)getpid());
 	FILE* pf = fopen(buf, "r");
@@ -101,9 +101,10 @@ static void print_memory_usage(const char* prefix)
 		unsigned data;//       data/stack
 		unsigned dt;//         dirty pages (unused in Linux 2.6)
 		fscanf(pf, "%u" /* %u %u %u %u %u"*/, &size/*, &resident, &share, &text, &lib, &data*/);
-		printf("%s %u MB mem used\n",prefix, size / (1024.0));
+		SSA_PR_LOG_INFO("%s %u MB mem used",prefix, size / (1024.0));
 	}
 	fclose(pf);
+	pf = NULL;
 }
 
 static size_t get_dataset_count(const struct ssa_db_smdb *p_ssa_db_smdb,
@@ -125,22 +126,22 @@ struct input_prm
 
 static void print_input_prm(const struct input_prm *prm)
 {
-	printf("SMDB database path: %s\n",prm->db_path);
-	printf("Dump to : %s\n",strlen(prm->db_path)? prm->db_path: "stdout");
+	SSA_PR_LOG_INFO("SMDB database path: %s",prm->db_path);
+	SSA_PR_LOG_INFO("Dump to : %s",strlen(prm->db_path)? prm->db_path: "stdout");
 	if(prm->id) {
 		if(prm->is_guid) {
-			printf("Input GUID: 0x%"PRIx64"\n",prm->id);
+			SSA_PR_LOG_INFO("Input GUID: 0x%"PRIx64"",prm->id);
 			return;
 		} else {
-			printf("Input LID: 0x%"PRIx16"\n",prm->id);
+			SSA_PR_LOG_INFO("Input LID: 0x%"PRIx16"",prm->id);
 			return;
 		}
 	} else if(strlen(prm->input_path)) {
-		printf("Input file with IDs: %s\n",prm->input_path);
+		SSA_PR_LOG_INFO("Input file with IDs: %s",prm->input_path);
 	}
 
 	if(prm->whole_world) {
-		printf("Compute \"whole world\" path records.\n");
+		SSA_PR_LOG_INFO("Compute \"whole world\" path records.");
 		return;
 	}
 }
@@ -250,11 +251,11 @@ static struct ssa_db_smdb *load_smdb(const char *path)
 	end = clock();
 	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	if(NULL != db_diff) {
-		printf("A database is loaded successfully.\n");
-		printf("Loading cpu time: %.5f sec.\n",cpu_time_used);
+		SSA_PR_LOG_INFO("A database is loaded successfully.");
+		SSA_PR_LOG_INFO("Loading cpu time: %.5f sec.",cpu_time_used);
 		print_memory_usage("Memory usage after the database loading: ");
 	} else {
-		fprintf(stderr,"Database loading is failed.\n");
+		SSA_PR_LOG_ERROR("Database loading is failed.");
 	}
 	return db_diff;
 }
@@ -262,7 +263,7 @@ static struct ssa_db_smdb *load_smdb(const char *path)
 static void destroy_smdb(struct ssa_db_smdb *db_diff)
 {
 	ssa_db_smdb_destroy(db_diff);
-	printf("smdb database is destroyed\n");
+	SSA_PR_LOG_DEBUG("smdb database is destroyed.");
 }
 
 static size_t read_ids_from_file(const char *path, GArray *arr)
@@ -276,7 +277,7 @@ static size_t read_ids_from_file(const char *path, GArray *arr)
 
 	fd = fopen(path,"r");
 	if(!fd) {
-		fprintf(stderr,"Can't open file for reading: %s\n",path);
+		SSA_PR_LOG_ERROR("Can't open file for reading: %s",path);
 		goto Exit;
 	}
 
@@ -339,7 +340,7 @@ static size_t get_input_guids(const struct input_prm *p_prm,
 		const size_t tmp = read_ids_from_file(p_prm->input_path,p_arr);
 
 		if(0 == tmp) {
-			fprintf(stderr,"Can't read ids from file: %s\n",p_prm->input_path);
+			SSA_PR_LOG_ERROR("Can't read ids from file: %s",p_prm->input_path);
 			return 0;
 		}
 	}
@@ -381,14 +382,14 @@ static int run_pr_calculation(struct input_prm* p_prm)
 
 	p_db_diff = load_smdb(p_prm->db_path);
 	if(NULL == p_db_diff){
-		fprintf(stderr,"Can't create smdb database from: %s .\n",p_prm->db_path);
+		SSA_PR_LOG_ERROR("Can't create smdb database from: %s .",p_prm->db_path);
 		res = -1;
 		goto Exit;
 	}
 
 	guids_arr = g_array_sized_new(FALSE,TRUE,sizeof(uint64_t),10000);
 	if(NULL == guids_arr) {
-		fprintf(stderr,"Can't create Glib array for guids.\n");
+		SSA_PR_LOG_ERROR("Can't create Glib array for guids.");
 		res = -1;
 		goto Exit;
 	}
@@ -396,7 +397,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 
 	path_arr = init_pr_path_container();
 	if(NULL == path_arr) {
-		fprintf(stderr,"Can't create a Glib array\n");
+		SSA_PR_LOG_ERROR("Can't create a Glib array.");
 		res = -1;
 		goto Exit;
 	}
@@ -405,10 +406,9 @@ static int run_pr_calculation(struct input_prm* p_prm)
 		be64_t guid = htonll(g_array_index(guids_arr,uint64_t,i));
 		ssa_pr_status_t res = SSA_PR_SUCCESS;
 
-		ssa_log(SSA_LOG_ALL,"Input guid: 0x%016"PRIx64"\n",ntohll(guid));	
 		res = ssa_pr_half_world(p_db_diff,guid,ssa_pr_path_output,path_arr);
 		if(SSA_PR_SUCCESS != res) {
-			fprintf(stderr,"Path record algorithm is failed. Input guid: 0x016%"PRIx64"\n",ntohll(guid));
+			SSA_PR_LOG_ERROR("Path record algorithm is failed. Input guid: 0x016%"PRIx64"",ntohll(guid));
 			res = -1;
 			goto Exit;
 		}
@@ -461,6 +461,8 @@ int main(int argc,char *argv[])
 	char id_string_val[PATH_MAX] = {};
 
 	memset(&prm,'\0',sizeof(prm));
+
+	ssa_pr_log_level = SSA_PR_DEBUG_LEVEL ;
 
 	while ((opt = getopt(argc, argv, "glan:f:o:h?")) != -1) {
 		switch (opt) {
@@ -581,10 +583,5 @@ int main(int argc,char *argv[])
 
 	print_input_prm(&prm);
 
-	if(!run_pr_calculation(&prm))
-		printf("Path record calculation is succeeded\n");
-	else
-		printf("Path record calculation is failed\n");
-
-	return 0;
+	return run_pr_calculation(&prm);
 }
