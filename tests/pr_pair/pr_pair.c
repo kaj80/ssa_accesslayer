@@ -363,10 +363,12 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	guint i = 0;
 	int res = 0;
 
+	/*
 	if(ssa_open_log1(SSA_ACCESS_LAYER_OUTPUT_FILE)) {
 		fprintf(stderr,"Can't open log file: %s\n",SSA_ACCESS_LAYER_OUTPUT_FILE);
 		return -1;
 	}
+	*/
 
 	if(strlen(p_prm->dump_path) > 0) {
 		fd_dump = fopen(p_prm->dump_path,"w");
@@ -438,7 +440,7 @@ Exit:
 		g_array_free(guids_arr,FALSE);
 		guids_arr = NULL;
 	}
-	ssa_close_log1();
+	//ssa_close_log1();
 	return res;
 }
 

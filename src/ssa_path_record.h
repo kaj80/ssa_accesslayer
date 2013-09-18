@@ -100,15 +100,8 @@ enum {
 #define DEBUG_TAG "DEBUG"
 
 
-extern FILE *flog1;
 extern int ssa_pr_log_level;
-int  ssa_open_log1(const char *log_file);
-void ssa_close_log1(void);
-void ssa_write_log1(int level, const char *format, ...);
-const char* get_time();
-
-#define ssa_log(level, format, ...) \
-	ssa_write_log1(level, "%s: "format, __func__, ## __VA_ARGS__)
+extern const char* get_time();
 
 #define _FILE strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__
 #define SSA_PR_LOG_FORMAT "%s | %-7s | %-15s | %s:%d |"
@@ -116,9 +109,9 @@ const char* get_time();
 #define SSA_PR_LOG_PRINT_FUNCTION(format,...) fprintf(stderr,format,__VA_ARGS__)
 
 
-#define SSA_PR_LOG_ERROR(message,args...) if(ssa_pr_log_level>=SSA_PR_EEROR_LEVEL) SSA_PR_LOG_PRINT_FUNCTION(SSA_PR_LOG_FORMAT message "\n",SSA_PR_LOG_PREFIX_ARGS(ERROR_TAG), ##args);
-#define SSA_PR_LOG_INFO(message,args...) if(ssa_pr_log_level>=SSA_PR_INFO_LEVEL) SSA_PR_LOG_PRINT_FUNCTION(SSA_PR_LOG_FORMAT message "\n",SSA_PR_LOG_PREFIX_ARGS(INFO_TAG), ##args);
-#define SSA_PR_LOG_DEBUG(message,args...) if(ssa_pr_log_level>=SSA_PR_DEBUG_LEVEL) SSA_PR_LOG_PRINT_FUNCTION(SSA_PR_LOG_FORMAT message "\n",SSA_PR_LOG_PREFIX_ARGS(DEBUG_TAG), ##args);
+#define SSA_PR_LOG_ERROR(message,args...) {if(ssa_pr_log_level>=SSA_PR_EEROR_LEVEL) SSA_PR_LOG_PRINT_FUNCTION(SSA_PR_LOG_FORMAT message "\n",SSA_PR_LOG_PREFIX_ARGS(ERROR_TAG), ##args);}
+#define SSA_PR_LOG_INFO(message,args...) {if(ssa_pr_log_level>=SSA_PR_INFO_LEVEL) SSA_PR_LOG_PRINT_FUNCTION(SSA_PR_LOG_FORMAT message "\n",SSA_PR_LOG_PREFIX_ARGS(INFO_TAG), ##args);}
+#define SSA_PR_LOG_DEBUG(message,args...) {if(ssa_pr_log_level>=SSA_PR_DEBUG_LEVEL) SSA_PR_LOG_PRINT_FUNCTION(SSA_PR_LOG_FORMAT message "\n",SSA_PR_LOG_PREFIX_ARGS(DEBUG_TAG), ##args);}
 
 #ifdef __cplusplus
 }
