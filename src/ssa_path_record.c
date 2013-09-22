@@ -255,10 +255,10 @@ static int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 			ntohs(source_lid));
 		return -1;
 	}
-	if(i >= lft_top_count || dest_lid > p_lft_top_tbl[i].lft_top) {
+	if(i >= lft_top_count || ntohs(dest_lid) > ntohs(p_lft_top_tbl[i].lft_top)) {
 		SSA_PR_LOG_ERROR("LFT routing is failed. Destination LID exceeds LFT top . "
 				"Source LID (0x%"SCNx16") Destination LID: (0x%"SCNx16") LFT top: %u",
-			ntohs(source_lid),p_lft_top_tbl[i].lft_top);
+			ntohs(source_lid),ntohs(dest_lid),p_lft_top_tbl[i].lft_top);
 		return -1;
 	}
 
