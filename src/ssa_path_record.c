@@ -39,10 +39,15 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <ssa_smdb.h>
+#include <glib.h>
 #include "ssa_path_record.h"
 
+#ifndef MIN
 #define MIN(X,Y) ((X) < (Y) ?  (X) : (Y))
+#endif
+#ifndef MAX
 #define MAX(X,Y) ((X) > (Y) ?  (X) : (Y))
+#endif
 
 #define MAX_HOPS 64
 #define LFT_NO_PATH 255
@@ -104,6 +109,8 @@ inline static size_t get_dataset_count(const struct ssa_db_smdb *p_ssa_db_smdb,
 	return ntohll(p_ssa_db_smdb->db_tables[table_id].set_count);
 }
 
+static uint8_t* is_switch_lookup = NULL;
+
 static const struct ep_guid_to_lid_tbl_rec *find_guid_to_lid_rec_by_guid(const struct ssa_db_smdb *p_ssa_db_smdb,
 		const be64_t port_guid)
 {
@@ -118,6 +125,16 @@ static const struct ep_guid_to_lid_tbl_rec *find_guid_to_lid_rec_by_guid(const s
 	SSA_ASSERT(p_guid_to_lid_tbl);
 
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
+
+	if(!is_switch_lookup){
+		is_switch_lookup = (uint8_t*)malloc(0xFFFF);
+		memset(is_switch_lookup,'\0',0xFFFF);
+	}
+
+
+	for (i = 0; i < count; i++) 
+		is_switch_lookup[ntohs(p_guid_to_lid_tbl[i].lid)] = p_guid_to_lid_tbl[i].is_switch;
+
 
 	for (i = 0; i < count; i++) {
 		if (port_guid == p_guid_to_lid_tbl[i].guid) 
@@ -216,7 +233,15 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	}
 	return SSA_PR_SUCCESS;
 }
-										
+
+static GHashTable *block_hash = NULL; 
+static GHashTable *lft_top_hash = NULL; 
+
+inline static gpointer lft_key(const be16_t lid, be16_t block_num)
+{
+	return GUINT_TO_POINTER((ntohs(lid) << 16) | ntohs(block_num));
+}
+	
 static int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 		const be16_t source_lid,
 		const be16_t dest_lid)
@@ -245,10 +270,35 @@ static int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 	lft_top_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LFT_TOP);
 	lft_block_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LFT_BLOCK);
 
+	if(NULL == block_hash){
+		block_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
+		SSA_ASSERT(block_hash);
+		for(i = 0;i < lft_block_count; ++i) {
+			gpointer key = lft_key(p_lft_block_tbl[i].lid,p_lft_block_tbl[i].block_num);
+			g_hash_table_insert(block_hash,key, GINT_TO_POINTER(i));
+			SSA_ASSERT(GPOINTER_TO_UINT(g_hash_table_lookup(block_hash,key)) == i);
+		}
+	}
+
+	if(NULL == lft_top_hash){
+		lft_top_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
+		SSA_ASSERT(lft_top_hash);
+		for(i = 0;i < lft_top_count; ++i) {
+			g_hash_table_insert(lft_top_hash,GINT_TO_POINTER(ntohs(p_lft_top_tbl[i].lid)), GINT_TO_POINTER(i));
+		}
+	}
+
 	lft_block_num = floorl(ntohs(dest_lid) / IB_SMP_DATA_SIZE);
 	lft_port_num = ntohs(dest_lid) % IB_SMP_DATA_SIZE;
 
-	for (i = 0; i < lft_top_count && source_lid != p_lft_top_tbl[i].lid; i++);
+	gpointer value= NULL;
+	gpointer org_key= NULL;
+
+	if(g_hash_table_lookup_extended(lft_top_hash,GUINT_TO_POINTER(ntohs(source_lid)),&org_key,&value))
+		i = GPOINTER_TO_SIZE(value);
+	else
+		for (i = 0; i < lft_top_count && source_lid != p_lft_top_tbl[i].lid; i++);
+
 	if(i >= lft_top_count) {
 		SSA_PR_LOG_ERROR("LFT routing is failed. LFT top is not found. "
 				"Source LID (0x%"SCNx16") Destination LID: (0x%"SCNx16")",
@@ -262,13 +312,27 @@ static int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 		return -1;
 	}
 
+
+	if(g_hash_table_lookup_extended(block_hash,lft_key(source_lid, htons(lft_block_num)),&org_key,&value)) 
+		if(LFT_NO_PATH != p_lft_block_tbl[GPOINTER_TO_INT(value)].block[lft_port_num]) {
+				return p_lft_block_tbl[GPOINTER_TO_INT(value)].block[lft_port_num]; 
+		}
+
+
+/*
 	for (i = 0;i < lft_block_count;++i) 
 		if(source_lid == p_lft_block_tbl[i].lid && lft_block_num == ntohs(p_lft_block_tbl[i].block_num))
 			return p_lft_block_tbl[i].block[lft_port_num];
-
+*/
 	return LFT_NO_PATH ;
 }
 
+static GHashTable *port_hash = NULL; 
+
+inline static gpointer port_key(const be16_t lid, uint8_t port_num)
+{
+	return GUINT_TO_POINTER((ntohs(lid) << 8) | port_num);
+}
 static const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 		const be16_t lid,
 		const int port_num)
@@ -285,11 +349,29 @@ static const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_d
 
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
 
+	if(NULL == port_hash){
+		port_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
+		SSA_ASSERT(port_hash);
+		for(i = 0;i < count; ++i) {
+			gpointer key = port_key(p_port_tbl[i].port_lid,
+					!(p_port_tbl[i].rate & SSA_DB_PORT_IS_SWITCH_MASK)? -1:p_port_tbl[i].port_num);
+			g_hash_table_insert(port_hash,key, GINT_TO_POINTER(i));
+			SSA_ASSERT(GPOINTER_TO_UINT(g_hash_table_lookup(port_hash,key)) == i);
+			}
+	}
+
+	gpointer value= NULL;
+	gpointer org_key= NULL;
+	if(g_hash_table_lookup_extended(port_hash,port_key(lid, is_switch_lookup[ntohs(lid)]?
+					port_num:-1),&org_key,&value)) 
+		return p_port_tbl + (int)value;
+
 	for (i = 0; i < count; i++) {
 		if(p_port_tbl[i].port_lid == lid &&
 				(!(p_port_tbl[i].rate & SSA_DB_PORT_IS_SWITCH_MASK) || port_num == p_port_tbl[i].port_num))
 				return p_port_tbl + i;
 	}
+
 
 	if(port_num >= 0) {
 		SSA_PR_LOG_ERROR("Port is not found. LID: 0x%"SCNx16" Port num: %d",
@@ -318,6 +400,12 @@ static inline const struct ep_port_tbl_rec *get_host_port(const struct ssa_db_sm
 	return find_port(p_ssa_db_smdb,lid,-1);
 }
 
+static GHashTable *link_hash = NULL; 
+
+inline static gpointer link_key(const be16_t lid, uint8_t port_num)
+{
+	return GUINT_TO_POINTER((ntohs(lid) << 8) | port_num);
+}
 static const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,
 		const be16_t lid,
 		const int port_num)
@@ -333,6 +421,23 @@ static const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_d
 	SSA_ASSERT(p_link_tbl);
 
 	link_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LINK);
+
+	if(NULL == link_hash){
+		link_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
+		SSA_ASSERT(port_hash);
+		for(i = 0;i < link_count; ++i) {
+			gpointer key = link_key(p_link_tbl[i].from_lid,
+					is_switch_lookup[ntohs(p_link_tbl[i].from_lid)]?
+					p_link_tbl[i].from_port_num:-1);
+			g_hash_table_insert(link_hash,key, GINT_TO_POINTER(i));
+			SSA_ASSERT(GPOINTER_TO_UINT(g_hash_table_lookup(link_hash,key)) == i);
+		}
+	}
+
+	gpointer value= NULL;
+	gpointer org_key= NULL;
+	if(g_hash_table_lookup_extended(link_hash,link_key(lid, is_switch_lookup[ntohs(lid)]? port_num:-1),&org_key,&value)) 
+		return p_link_tbl + (int)value;
 
 	for (i = 0;i < link_count;i++)
 		if(lid == p_link_tbl[i].from_lid && (port_num < 0 || port_num == p_link_tbl[i].from_port_num))

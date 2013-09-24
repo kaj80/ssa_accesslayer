@@ -62,8 +62,9 @@ lib_LTLIBRARIES = libssaaccesslayer.la
 
 # Quiter for the server
 libssaaccesslayer_la_SOURCES = ./src/ssa_path_record.c
-libssaaccesslayer_la_LDFLAGS = -export-dynamic -lm
-libssaaccesslayer_la_CPPFLAGS =  $(INCLUDES) -I$(includedir)  -g 
+libssaaccesslayer_la_LDFLAGS = -export-dynamic -lm \
+									$(GLIB_LIBS) -lglib-2.0  
+libssaaccesslayer_la_CPPFLAGS =  $(INCLUDES) -I$(includedir) $(DEPS_CFLAGS) $(GLIB_CFLAGS) -g 
 
 
 
