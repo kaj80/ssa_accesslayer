@@ -403,7 +403,13 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 					htons(p_source_rec->lid),htons(p_dest_rec->lid));
 			return SSA_PR_NO_PATH;
 		}
+
 		port = find_port(p_ssa_db_smdb,p_source_rec->lid,out_port_num);	
+		if(NULL == port) {
+			SSA_PR_LOG_ERROR("Port is not found. Path record calculation is stopped."
+					" LID: 0x%"SCNx16" num: %u",htons(p_source_rec->lid),out_port_num);
+			return SSA_PR_ERROR;
+		}
 	} else {
 		port = source_port;
 	}
