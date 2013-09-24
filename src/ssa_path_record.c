@@ -357,11 +357,16 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 	const struct ep_port_tbl_rec *source_port = NULL;
 	const struct ep_port_tbl_rec *dest_port = NULL;
 	const struct ep_port_tbl_rec *port = NULL;
+	const struct ep_subnet_opts_tbl_rec *opt_rec = NULL;
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_source_rec);
 	SSA_ASSERT(p_dest_rec);
 	SSA_ASSERT(p_path_prm);
+
+	opt_rec = 
+		(const struct ep_subnet_opts_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_SUBNET_OPTS];
+	SSA_ASSERT(opt_rec);
 
 	if(p_source_rec->is_switch) 
 		source_port = get_switch_port(p_ssa_db_smdb,p_source_rec->lid,0);
@@ -383,7 +388,7 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 		return SSA_PR_ERROR;
 	}
 
-	p_path_prm->pkt_life = source_port == dest_port ? 0 : p_ssa_db_smdb->subnet_timeout;
+	p_path_prm->pkt_life = source_port == dest_port ? 0 : opt_rec[0].subnet_timeout;
 	p_path_prm->mtu = source_port->neighbor_mtu;
 	p_path_prm->rate = source_port->rate & SSA_DB_PORT_RATE_MASK;
 	p_path_prm->pkt_life = 0;
