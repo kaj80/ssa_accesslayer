@@ -41,6 +41,7 @@
 #include <ssa_smdb.h>
 #include "ssa_path_record.h"
 #include "ssa_path_record_helper.h"
+#include "ssa_path_record_data.h"
 
 #define MIN(X,Y) ((X) < (Y) ?  (X) : (Y))
 #define MAX(X,Y) ((X) > (Y) ?  (X) : (Y))
@@ -48,6 +49,10 @@
 #define MAX_HOPS 64
 #define LFT_NO_PATH 255
 
+
+struct ssa_pr_context {
+	struct ssa_pr_smdb_index *p_index;
+};
 
 
 static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smdb,
@@ -528,11 +533,56 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 
 ssa_path_record_context ssa_pr_create_context(FILE* log_fd, int log_level)
 {
+	struct ssa_pr_smdb_index *p_context = NULL;
+
 	ssa_pr_log_level = log_level;
 	ssa_pr_log_fd = log_fd;
+
+	p_context = (struct ssa_pr_smdb_index *)malloc(struct ssa_pr_smdb_index); 
+	if(!p_context) {
+		SSA_PR_ERROR("Cannot allocate path record calculation context");
+		goto Error;
+	}
+	
+	memset(p_context,'\0',sizeof(ssa_pr_smdb_index));
+
+	p_context->p_index = (struct ssa_pr_smdb_index *)malloc(sizeof(struct ssa_pr_smdb_index));
+	if(!p_context->p_index) {
+		SSA_PR_ERROR("Cannot allocate path record data index");
+		goto Error;
+	}
+
+	return p_context;
+Error:
+	if(p_context && p_context->p_index) {
+		free(p_context->p_index);
+		p_context->p_index = NULL;
+	}
+
+	if(p_context) {
+		free(p_context);
+		p_context = NULL;
+	}
+
+	ssa_pr_log_level = 0;
+	ssa_pr_log_fd = NULL;
+
+	return NULL;
 }
 
 void ssa_pr_destroy_context(ssa_path_record_context ctx)
 {
+	struct ssa_pr_smdb_index *p_context = (ssa_pr_smdb_index *)ctx;
 
+	if(p_context) {
+		if(p_context->p_index) {
+			free(p_context->p_index);
+			p_context->p_index = NULL;
+		}
+		free(p_context);
+		p_context = NULL;
+	}
+
+	ssa_pr_log_level = 0;
+	ssa_pr_log_fd = NULL;
 }
