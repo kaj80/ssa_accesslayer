@@ -218,6 +218,31 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	return SSA_PR_SUCCESS;
 }
 										
+ssa_pr_status_t ssa_pr_whole_world(struct ssa_db_smdb* p_ssa_db_smdb, 
+		ssa_path_record_context context,
+		ssa_pr_path_dump_t dump_clbk,
+		void* clbk_prm)
+{
+	size_t i = 0;
+	const struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl = NULL;
+	size_t count = 0;
+	ssa_pr_status_t res = SSA_PR_SUCCESS;
+
+	SSA_ASSERT(p_ssa_db_smdb);
+
+	p_guid_to_lid_tbl = (struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
+	SSA_ASSERT(p_guid_to_lid_tbl);
+
+	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
+
+	for (i = 0; i < count; i++) {
+		res = ssa_pr_half_world(p_ssa_db_smdb,context,p_guid_to_lid_tbl[i].guid,dump_clbk,clbk_prm);
+		if (SSA_PR_SUCCESS != res) 
+			return res;
+	}
+	return SSA_PR_SUCCESS;
+}
+
 static int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 		const be16_t source_lid,
 		const be16_t dest_lid)

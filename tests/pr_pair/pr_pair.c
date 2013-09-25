@@ -382,6 +382,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	GArray *guids_arr = NULL;
 	guint i = 0;
 	int res = 0;
+	ssa_pr_status_t pr_res = SSA_PR_SUCCESS;
 
 	if(!strlen(p_prm->log_path) || !strcmp(p_prm->log_path,"stderr"))
 		fd_log = stderr;
@@ -421,7 +422,6 @@ static int run_pr_calculation(struct input_prm* p_prm)
 		res = -1;
 		goto Exit;
 	}
-	get_input_guids(p_prm,p_db_diff,guids_arr);
 
 	path_arr = init_pr_path_container();
 	if(NULL == path_arr) {
@@ -437,16 +437,21 @@ static int run_pr_calculation(struct input_prm* p_prm)
 		goto Exit;
 	}
 
-	for(i = 0; i < guids_arr->len; ++i) {
-		be64_t guid = htonll(g_array_index(guids_arr,uint64_t,i));
-		ssa_pr_status_t res = SSA_PR_SUCCESS;
+	if(!p_prm->whole_world) { 
+		get_input_guids(p_prm,p_db_diff,guids_arr);
+		for(i = 0; i < guids_arr->len && SSA_PR_SUCCESS == res; ++i) {
+			be64_t guid = htonll(g_array_index(guids_arr,uint64_t,i));
 
-		res = ssa_pr_half_world(p_db_diff,NULL,guid,ssa_pr_path_output,path_arr);
-		if(SSA_PR_SUCCESS != res) {
-			fprintf(stderr,"Path record algorithm is failed. Input guid: 0x016%"PRIx64"",ntohll(guid));
-			res = -1;
-			goto Exit;
+			pr_res = ssa_pr_half_world(p_db_diff,NULL,guid,ssa_pr_path_output,path_arr);
 		}
+	} else {
+		pr_res = ssa_pr_whole_world(p_db_diff,NULL,ssa_pr_path_output,path_arr);
+	}	
+
+	if(SSA_PR_SUCCESS != pr_res) {
+		fprintf(stderr,"Path record algorithm is failed.");
+		res = -1;
+		goto Exit;
 	}
 
 	dump_pr(path_arr,p_db_diff,fd_dump);
