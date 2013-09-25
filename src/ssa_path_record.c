@@ -40,6 +40,7 @@
 #include <assert.h>
 #include <ssa_smdb.h>
 #include "ssa_path_record.h"
+#include "ssa_path_record_helper.h"
 
 #define MIN(X,Y) ((X) < (Y) ?  (X) : (Y))
 #define MAX(X,Y) ((X) > (Y) ?  (X) : (Y))
@@ -48,7 +49,6 @@
 #define LFT_NO_PATH 255
 
 
-int ssa_pr_log_level = SSA_PR_EEROR_LEVEL;
 
 static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smdb,
 		const struct ep_guid_to_lid_tbl_rec *p_source_rec,
@@ -131,6 +131,7 @@ static const struct ep_guid_to_lid_tbl_rec *find_guid_to_lid_rec_by_guid(const s
 
 
 ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb, 
+		ssa_path_record_context context,
 		be64_t port_guid,
 		ssa_pr_path_dump_t dump_clbk,
 		void *clbk_prm)
@@ -498,16 +499,15 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 
 	return SSA_PR_SUCCESS;
 }
-const char* get_time()
+
+
+ssa_path_record_context ssa_pr_create_context(FILE* log_fd, int log_level)
 {
-	static char buffer[64] = {};
-	time_t rawtime;
-	struct tm *timeinfo;
+	ssa_pr_log_level = log_level;
+	ssa_pr_log_fd = log_fd;
+}
 
-	time(&rawtime);
-	timeinfo = localtime(&rawtime);
+void ssa_pr_destroy_context(ssa_path_record_context ctx)
+{
 
-	strftime(buffer, 64, "%Y-%m-%d %H:%M:%S", timeinfo);
-
-	return buffer;
 }
