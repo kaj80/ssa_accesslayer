@@ -30,11 +30,14 @@
 #ifndef SSA_PATH_RECORD_DATA_H
 #define SSA_PATH_RECORD_DATA_H
 
-#include <glib.h>
-
 /*
  * Internal API for data
  */
+
+#include <glib.h>
+
+#define LFT_NO_PATH 255
+
 struct ssa_pr_smdb_index {
 	uint8_t *is_switch_lookup;
 	uint16_t *lft_top_lookup;
@@ -46,7 +49,28 @@ struct ssa_pr_smdb_index {
 
 extern int ssa_pr_build_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 		const struct ssa_db_smdb *p_ssa_db_smdb);
+
 extern void ssa_pr_destroy_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index);
+
 extern int ssa_pr_rebuild_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 		const struct ssa_db_smdb *p_ssa_db_smdb);
+
+extern const struct ep_guid_to_lid_tbl_rec 
+*find_guid_to_lid_rec_by_guid(const struct ssa_db_smdb *p_ssa_db_smdb,
+		const be64_t port_guid);
+
+extern const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
+		const struct ssa_pr_smdb_index *p_index,
+		const be16_t lid,
+		const int port_num);
+
+extern int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
+		const struct ssa_pr_smdb_index *p_index,
+		const be16_t source_lid,
+		const be16_t dest_lid);
+
+extern const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,
+		const struct ssa_pr_smdb_index *p_index,
+		const be16_t lid,
+		const int port_num);
 #endif /* end of include guard: SSA_PATH_RECORD_DATA_H */

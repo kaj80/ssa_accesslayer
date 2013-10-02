@@ -109,7 +109,7 @@ static void print_memory_usage(const char* prefix)
 		unsigned data;//       data/stack
 		unsigned dt;//         dirty pages (unused in Linux 2.6)
 		fscanf(pf, "%u" /* %u %u %u %u %u"*/, &size/*, &resident, &share, &text, &lib, &data*/);
-		printf("%s %u MB mem used",prefix, size / (1024.0));
+		printf("%s %u MB mem used\n",prefix, size / (1024.0));
 	}
 	fclose(pf);
 	pf = NULL;
@@ -268,11 +268,11 @@ static struct ssa_db_smdb *load_smdb(const char *path)
 	end = clock();
 	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	if(NULL != db_diff) {
-		printf("A database is loaded successfully.");
-		printf("Loading cpu time: %.5f sec.",cpu_time_used);
+		printf("A database is loaded successfully.\n");
+		printf("Loading cpu time: %.5f sec.\n",cpu_time_used);
 		print_memory_usage("Memory usage after the database loading: ");
 	} else {
-		fprintf(stderr,"Database loading is failed.");
+		fprintf(stderr,"Database loading is failed.\n");
 	}
 	return db_diff;
 }
@@ -294,7 +294,7 @@ static size_t read_ids_from_file(const char *path, GArray *arr)
 
 	fd = fopen(path,"r");
 	if(!fd) {
-		fprintf(stderr,"Can't open file for reading: %s",path);
+		fprintf(stderr,"Can't open file for reading: %s\n",path);
 		goto Exit;
 	}
 
@@ -375,7 +375,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	FILE *fd_log = NULL;
 	int close_log = 0;
 	struct ssa_db_smdb *p_db_diff = NULL;
-	ssa_path_record_context p_context = NULL;
+	void *p_context = NULL;
 	be64_t *p_guids = NULL;
 	size_t count_guids = 0;
 	GPtrArray *path_arr = NULL;
@@ -442,14 +442,14 @@ static int run_pr_calculation(struct input_prm* p_prm)
 		for(i = 0; i < guids_arr->len && SSA_PR_SUCCESS == res; ++i) {
 			be64_t guid = htonll(g_array_index(guids_arr,uint64_t,i));
 
-			pr_res = ssa_pr_half_world(p_db_diff,NULL,guid,ssa_pr_path_output,path_arr);
+			pr_res = ssa_pr_half_world(p_db_diff,p_context,guid,ssa_pr_path_output,path_arr);
 		}
 	} else {
-		pr_res = ssa_pr_whole_world(p_db_diff,NULL,ssa_pr_path_output,path_arr);
+		pr_res = ssa_pr_whole_world(p_db_diff,p_context,ssa_pr_path_output,path_arr);
 	}	
 
 	if(SSA_PR_SUCCESS != pr_res) {
-		fprintf(stderr,"Path record algorithm is failed.");
+		fprintf(stderr,"Path record algorithm is failed.\n");
 		res = -1;
 		goto Exit;
 	}

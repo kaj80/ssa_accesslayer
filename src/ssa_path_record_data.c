@@ -34,9 +34,10 @@
 
 #include <errno.h>
 #include <glib.h>
+#include <math.h>
 #include <ssa_smdb.h>
 #include "ssa_path_record_helper.h"
-#include <ssa_path_record_data.h>
+#include "ssa_path_record_data.h"
 
 
 #define NO_REAL_PORT_NUM -1
@@ -231,27 +232,27 @@ int ssa_pr_build_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 	SSA_ASSERT(p_ssa_pr_smdb_index);
 
 	res = build_is_switch_lookup(p_ssa_pr_smdb_index,p_ssa_db_smdb);
-	if(!res) {
+	if(res) {
 		SSA_PR_LOG_ERROR("Build for is_switch_lookup is failed");
 		return res;
 	}
 	res = build_lft_top_lookup(p_ssa_pr_smdb_index,p_ssa_db_smdb);
-	if(!res) {
+	if(res) {
 		SSA_PR_LOG_ERROR("Build for lft_top is failed");
 		return res;
 	}
 	res = build_port_index(p_ssa_pr_smdb_index,p_ssa_db_smdb);
-	if(!res) {
+	if(res) {
 		SSA_PR_LOG_ERROR("Build for port index is failed");
 		return res;
 	}
 	res = build_lft_block_index(p_ssa_pr_smdb_index,p_ssa_db_smdb);
-	if(!res) {
+	if(res) {
 		SSA_PR_LOG_ERROR("Build for lft block index is failed");
 		return res;
 	}
 	res = build_link_index(p_ssa_pr_smdb_index,p_ssa_db_smdb);
-	if(!res) {
+	if(res) {
 		SSA_PR_LOG_ERROR("Build for link index is failed");
 		return res;
 	}
@@ -288,6 +289,8 @@ void ssa_pr_destroy_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index)
 		g_hash_table_destroy(p_ssa_pr_smdb_index->lft_block_hash);
 		p_ssa_pr_smdb_index->lft_block_hash = NULL;
 	}
+
+	p_ssa_pr_smdb_index->epoch = -1;
 }
 
 static int epoch_table_ids[] = {
@@ -302,7 +305,7 @@ int ssa_pr_rebuild_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 		const struct ssa_db_smdb *p_ssa_db_smdb)
 {
 	int i = 0;
-	uint64_t smdb_epoch = -1;
+	uint64_t smdb_epoch = 0;
 	int res = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
@@ -316,12 +319,166 @@ int ssa_pr_rebuild_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 	if(p_ssa_pr_smdb_index->epoch != smdb_epoch) {
 		ssa_pr_destroy_indexes(p_ssa_pr_smdb_index);
 		res = ssa_pr_build_indexes(p_ssa_pr_smdb_index,p_ssa_db_smdb);
-		if(!res) {
-			SSA_PR_LOG_ERROR("SMDB index creation is failed. epoch : %ll",smdb_epoch);
+		if(res) {
+			SSA_PR_LOG_ERROR("SMDB index creation is failed. epoch : %"PRIu64,smdb_epoch);
 			return res;
 		}
 		p_ssa_pr_smdb_index->epoch = smdb_epoch;
-		SSA_PR_LOG_INFO("SMDB index was created. epoch : %ll",p_ssa_pr_smdb_index->epoch);
+		SSA_PR_LOG_INFO("SMDB index was created. epoch : %"PRIu64,p_ssa_pr_smdb_index->epoch);
 	}
 	return 0;
+}
+
+const struct ep_guid_to_lid_tbl_rec *find_guid_to_lid_rec_by_guid(const struct ssa_db_smdb *p_ssa_db_smdb,
+		const be64_t port_guid)
+{
+	size_t i = 0;
+	const struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl = NULL;
+	size_t count = 0;
+
+	SSA_ASSERT(p_ssa_db_smdb);
+	SSA_ASSERT(port_guid);
+
+	p_guid_to_lid_tbl = (struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
+	SSA_ASSERT(p_guid_to_lid_tbl);
+
+	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
+
+	for (i = 0; i < count; i++) {
+		if (port_guid == p_guid_to_lid_tbl[i].guid) 
+			return p_guid_to_lid_tbl + i;
+	}
+
+	SSA_PR_LOG_ERROR("GUID to LID record is not found. GUID: 0x%016"PRIx64,ntohll(port_guid));
+
+	return NULL;
+}
+
+int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
+		const struct ssa_pr_smdb_index *p_index,
+		const be16_t source_lid,
+		const be16_t dest_lid)
+{
+	size_t i = 0;
+
+	struct ep_lft_block_tbl_rec *p_lft_block_tbl = NULL;
+
+	size_t lft_block_num = 0;
+	size_t lft_port_num = 0;
+
+	gpointer value = NULL;
+	gpointer org_key = NULL;
+
+	uint16_t lft_top = 0;
+
+	SSA_ASSERT(p_ssa_db_smdb);
+	SSA_ASSERT(p_index);
+	SSA_ASSERT(p_index->lft_top_lookup);
+	SSA_ASSERT(p_index->lft_block_hash);
+	SSA_ASSERT(source_lid);
+	SSA_ASSERT(dest_lid);
+
+	p_lft_block_tbl =(struct ep_lft_block_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LFT_BLOCK];
+	SSA_ASSERT(p_lft_block_tbl);
+
+	lft_block_num = floorl(ntohs(dest_lid) / IB_SMP_DATA_SIZE);
+	lft_port_num = ntohs(dest_lid) % IB_SMP_DATA_SIZE;
+	lft_top = p_index->lft_top_lookup[ntohs(source_lid)];
+
+	if(ntohs(dest_lid) > lft_top) {
+		SSA_PR_LOG_ERROR("LFT routing is failed. Destination LID exceeds LFT top . "
+				"Source LID (0x%"SCNx16") Destination LID: (0x%"SCNx16") LFT top: %u",
+			ntohs(source_lid),ntohs(dest_lid),lft_top);
+		return -1;
+	}
+
+	if(g_hash_table_lookup_extended(p_index->lft_block_hash,be16b16_key(source_lid,htons(lft_block_num)),&org_key,&value)) {
+		if(LFT_NO_PATH != p_lft_block_tbl[GPOINTER_TO_INT(value)].block[lft_port_num]) {
+			return p_lft_block_tbl[GPOINTER_TO_INT(value)].block[lft_port_num];
+		}
+	}
+
+	return LFT_NO_PATH ;
+}
+
+const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
+		const struct ssa_pr_smdb_index *p_index,
+		const be16_t lid,
+		const int port_num)
+{
+	size_t i = 0;
+	const struct ep_port_tbl_rec  *p_port_tbl = NULL;
+	size_t count = 0;
+	gpointer value= NULL;
+	gpointer org_key= NULL;
+	gboolean res = 0;
+
+	SSA_ASSERT(p_ssa_db_smdb);
+	SSA_ASSERT(p_index);
+	SSA_ASSERT(p_index->port_hash);
+	SSA_ASSERT(p_index->is_switch_lookup);
+	SSA_ASSERT(lid);
+
+	p_port_tbl = (const struct ep_port_tbl_rec*)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_PORT];
+	SSA_ASSERT(p_port_tbl );
+
+	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
+
+	res = g_hash_table_lookup_extended(p_index->port_hash,
+			be16uint8_key(lid,p_index->is_switch_lookup[ntohs(lid)]?
+				port_num:NO_REAL_PORT_NUM),&org_key,&value);
+
+	if(!res || GPOINTER_TO_INT(value) >= count) {
+		if(port_num >= 0) {
+			SSA_PR_LOG_ERROR("Port is not found. LID: 0x%"SCNx16" Port num: %d",
+					ntohs(lid),port_num);
+		} else {
+			SSA_PR_LOG_ERROR("Port is not found. LID: 0x%"SCNx16,ntohs(lid));
+		}
+	}
+
+	return p_port_tbl + GPOINTER_TO_INT(value);
+}
+
+const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,
+		const struct ssa_pr_smdb_index *p_index,
+		const be16_t lid,
+		const int port_num)
+{
+	size_t i = 0;
+	const struct ep_link_tbl_rec  *p_link_tbl =  NULL;
+	size_t link_count = 0;
+	gpointer value= NULL;
+	gpointer org_key= NULL;
+	gboolean res = 0;
+
+	SSA_ASSERT(p_ssa_db_smdb);
+	SSA_ASSERT(p_index);
+	SSA_ASSERT(p_index->port_hash);
+	SSA_ASSERT(p_index->is_switch_lookup);
+	SSA_ASSERT(lid);
+
+	p_link_tbl = (const struct ep_link_tbl_rec*)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LINK];
+	SSA_ASSERT(p_link_tbl);
+
+	res = g_hash_table_lookup_extended(p_index->link_hash,
+			be16uint8_key(lid,p_index->is_switch_lookup[ntohs(lid)]?
+				port_num:NO_REAL_PORT_NUM),&org_key,&value);
+
+	link_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LINK);
+
+	for (i = 0;i < link_count;i++)
+		if(lid == p_link_tbl[i].from_lid && (port_num < 0 || port_num == p_link_tbl[i].from_port_num))
+			return p_link_tbl + i;
+
+	if(!res || GPOINTER_TO_INT(value) >= link_count) {
+		if(port_num >= 0) {
+			SSA_PR_LOG_ERROR("Link is not found. LID: 0x%"SCNx16" Port num: %u",
+					ntohs(lid),port_num);
+		} else {
+			SSA_PR_LOG_ERROR("Link is not found. LID: 0x%"SCNx16,ntohs(lid));
+		}
+	}
+
+	return p_link_tbl  + GPOINTER_TO_INT(value);
 }

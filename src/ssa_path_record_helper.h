@@ -61,8 +61,8 @@ extern FILE *ssa_pr_log_fd;
 extern const char* get_time();
 
 #define _FILE strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__
-#define SSA_PR_LOG_FORMAT "%s | %-7s | %-15s | %s:%d |"
-#define SSA_PR_LOG_PREFIX_ARGS(tag) get_time(), tag ,_FILE,__func__,__LINE__ 
+#define SSA_PR_LOG_FORMAT "%s | %-7s | %-15s:%d | %s |"
+#define SSA_PR_LOG_PREFIX_ARGS(tag) get_time(), tag ,_FILE,__LINE__,__func__ 
 #define SSA_PR_LOG_PRINT_FUNCTION(format,...) fprintf(ssa_pr_log_fd,format,__VA_ARGS__)
 
 

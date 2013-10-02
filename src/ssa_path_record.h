@@ -65,19 +65,18 @@ typedef struct ssa_path_parms {
 
 typedef void (*ssa_pr_path_dump_t)(const ssa_path_parms_t*,void*);
 
-typedef void* ssa_path_record_context;
 
-extern ssa_path_record_context ssa_pr_create_context(FILE* log_fd, int log_level);
-extern void ssa_pr_destroy_context(ssa_path_record_context ctx);
+extern void * ssa_pr_create_context(FILE* log_fd, int log_level);
+extern void ssa_pr_destroy_context(void * ctx);
 
 extern ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb, 
-		ssa_path_record_context context,
+		void * context,
 		be64_t port_guid,
 		ssa_pr_path_dump_t dump_clbk,
 		void* clbk_prm);
 
 extern ssa_pr_status_t ssa_pr_whole_world(struct ssa_db_smdb* p_ssa_db_smdb, 
-		ssa_path_record_context context,
+		void * context,
 		ssa_pr_path_dump_t dump_clbk,
 		void* clbk_prm);
 
