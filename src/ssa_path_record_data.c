@@ -467,10 +467,6 @@ const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,
 
 	link_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LINK);
 
-	for (i = 0;i < link_count;i++)
-		if(lid == p_link_tbl[i].from_lid && (port_num < 0 || port_num == p_link_tbl[i].from_port_num))
-			return p_link_tbl + i;
-
 	if(!res || GPOINTER_TO_INT(value) >= link_count) {
 		if(port_num >= 0) {
 			SSA_PR_LOG_ERROR("Link is not found. LID: 0x%"SCNx16" Port num: %u",
