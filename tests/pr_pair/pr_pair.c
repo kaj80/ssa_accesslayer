@@ -454,6 +454,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 		goto Exit;
 	}
 
+	printf("%u path records found\n",path_arr->len);
 	dump_pr(path_arr,p_db_diff,fd_dump);
 
 Exit:
