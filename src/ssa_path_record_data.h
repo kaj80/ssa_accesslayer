@@ -38,6 +38,7 @@
 
 #define LFT_NO_PATH 255
 #define MAX_LOOKUP_LID 0xBFFF
+#define MAX_LOOKUP_PORT 254
 #define MAX_LFT_BLOCK_MUM (MAX_LOOKUP_LID/64)
 
 struct ssa_pr_smdb_index {
@@ -45,8 +46,7 @@ struct ssa_pr_smdb_index {
 	uint16_t lft_top_lookup[MAX_LOOKUP_LID];
 	uint64_t* lft_block_lookup[MAX_LOOKUP_LID];
 	uint64_t ca_port_lookup[MAX_LOOKUP_LID];
-	GHashTable *lft_block_hash;
-	GHashTable *port_hash;
+	uint64_t* switch_port_lookup[MAX_LOOKUP_LID];
 	GHashTable *link_hash;
 	uint64_t epoch;
 };

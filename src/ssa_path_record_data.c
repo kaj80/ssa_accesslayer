@@ -115,35 +115,38 @@ static int build_port_index(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 {
 	size_t i = 0, count = 0;
 	const struct ep_port_tbl_rec  *p_port_tbl = NULL;
+	size_t switch_port_lookup_size = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_ssa_pr_smdb_index);
-	SSA_ASSERT(!p_ssa_pr_smdb_index->port_hash);
 
 	p_port_tbl = 
 		(struct ep_port_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_PORT];
 	SSA_ASSERT(p_port_tbl);
 
-	p_ssa_pr_smdb_index->port_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
-	if(!p_ssa_pr_smdb_index->port_hash) {
-		int errsv = errno;
-		SSA_PR_LOG_ERROR("GLib hash table creation is failed");
-		return -1;
-	}
-
 	memset(p_ssa_pr_smdb_index->ca_port_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint64_t));
+	memset(p_ssa_pr_smdb_index->switch_port_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint64_t*));
 
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
 
 	for (i = 0; i < count; i++) {
 		if(p_port_tbl[i].rate & SSA_DB_PORT_IS_SWITCH_MASK) {
-			g_hash_table_insert(p_ssa_pr_smdb_index->port_hash,
-					be16uint8_key(p_port_tbl[i].port_lid,p_port_tbl[i].port_num),
-					GINT_TO_POINTER(i));
+			uint64_t *port_lookup = p_ssa_pr_smdb_index->switch_port_lookup[ntohs(p_port_tbl[i].port_lid)];
+			if(!port_lookup) {
+				size_t j = 0;
+				port_lookup = (uint64_t*)malloc(MAX_LOOKUP_PORT * sizeof(uint64_t));
+				for(j = 0;j < MAX_LOOKUP_PORT;++j)
+					port_lookup[j] = count + 1;
+				p_ssa_pr_smdb_index->switch_port_lookup[ntohs(p_port_tbl[i].port_lid)] = port_lookup;
+				switch_port_lookup_size += MAX_LOOKUP_PORT * sizeof(uint64_t);
+			}
+			port_lookup[p_port_tbl[i].port_num] = i;
 		} else {
 			p_ssa_pr_smdb_index->ca_port_lookup[ntohs(p_port_tbl[i].port_lid)] = i;
 		}
 	}
+
+	SSA_PR_LOG_INFO("Switch ports lookup table size: %u bytes",switch_port_lookup_size);
 
 	return 0;
 }
@@ -267,13 +270,10 @@ void ssa_pr_destroy_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index)
 
 	memset(p_ssa_pr_smdb_index->lft_top_lookup ,'\0',MAX_LOOKUP_LID * sizeof(uint16_t));
 
-	if(p_ssa_pr_smdb_index->port_hash) {
-		g_hash_table_destroy(p_ssa_pr_smdb_index->port_hash);
-		p_ssa_pr_smdb_index->port_hash = NULL;
-	}
-
-
 	memset(p_ssa_pr_smdb_index->ca_port_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint64_t));
+	for(i = 0; i < MAX_LOOKUP_LID; ++i)
+		free(p_ssa_pr_smdb_index->switch_port_lookup[i]);
+	memset(p_ssa_pr_smdb_index->switch_port_lookup,'\0',MAX_LOOKUP_PORT * sizeof(uint64_t*));
 
 	if(p_ssa_pr_smdb_index->link_hash) {
 		g_hash_table_destroy(p_ssa_pr_smdb_index->link_hash);
@@ -421,7 +421,6 @@ const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_index);
-	SSA_ASSERT(p_index->port_hash);
 	SSA_ASSERT(p_index->is_switch_lookup);
 	SSA_ASSERT(lid);
 
@@ -431,15 +430,13 @@ const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
 
 	if(p_index->is_switch_lookup[ntohs(lid)]) {
-		gboolean res = 0;
-		res = g_hash_table_lookup_extended(p_index->port_hash,
-				be16uint8_key(lid,port_num),&org_key,&value);
-
-		port_index = GPOINTER_TO_INT(value);
-		if(!res) {
+		uint64_t *switch_port_lookup = p_index->switch_port_lookup[ntohs(lid)]; 
+		if(!switch_port_lookup) {
 			SSA_PR_LOG_ERROR("Port is not found. LID: 0x%"SCNx16" Port num: %d",
 					ntohs(lid),port_num);
+			return NULL;
 		}
+		port_index = switch_port_lookup[port_num];
 	} else {
 		port_index = p_index->ca_port_lookup[ntohs(lid)];
 	}
