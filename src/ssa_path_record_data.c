@@ -131,14 +131,18 @@ static int build_port_index(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 		return -1;
 	}
 
+	memset(p_ssa_pr_smdb_index->ca_port_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint64_t));
+
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
 
 	for (i = 0; i < count; i++) {
-		g_hash_table_insert(p_ssa_pr_smdb_index->port_hash,
-				be16uint8_key(p_port_tbl[i].port_lid,
-					!(p_port_tbl[i].rate & SSA_DB_PORT_IS_SWITCH_MASK)?
-				   	NO_REAL_PORT_NUM : p_port_tbl[i].port_num),
-			   	GINT_TO_POINTER(i));
+		if(p_port_tbl[i].rate & SSA_DB_PORT_IS_SWITCH_MASK) {
+			g_hash_table_insert(p_ssa_pr_smdb_index->port_hash,
+					be16uint8_key(p_port_tbl[i].port_lid,p_port_tbl[i].port_num),
+					GINT_TO_POINTER(i));
+		} else {
+			p_ssa_pr_smdb_index->ca_port_lookup[ntohs(p_port_tbl[i].port_lid)] = i;
+		}
 	}
 
 	return 0;
@@ -267,6 +271,9 @@ void ssa_pr_destroy_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index)
 		g_hash_table_destroy(p_ssa_pr_smdb_index->port_hash);
 		p_ssa_pr_smdb_index->port_hash = NULL;
 	}
+
+
+	memset(p_ssa_pr_smdb_index->ca_port_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint64_t));
 
 	if(p_ssa_pr_smdb_index->link_hash) {
 		g_hash_table_destroy(p_ssa_pr_smdb_index->link_hash);
@@ -410,7 +417,7 @@ const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 	size_t count = 0;
 	gpointer value = NULL;
 	gpointer org_key = NULL;
-	gboolean res = 0;
+	size_t port_index = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_index);
@@ -423,20 +430,26 @@ const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
 
-	res = g_hash_table_lookup_extended(p_index->port_hash,
-			be16uint8_key(lid,p_index->is_switch_lookup[ntohs(lid)]?
-				port_num:NO_REAL_PORT_NUM),&org_key,&value);
+	if(p_index->is_switch_lookup[ntohs(lid)]) {
+		gboolean res = 0;
+		res = g_hash_table_lookup_extended(p_index->port_hash,
+				be16uint8_key(lid,port_num),&org_key,&value);
 
-	if(!res || GPOINTER_TO_INT(value) >= count) {
-		if(port_num >= 0) {
+		port_index = GPOINTER_TO_INT(value);
+		if(!res) {
 			SSA_PR_LOG_ERROR("Port is not found. LID: 0x%"SCNx16" Port num: %d",
 					ntohs(lid),port_num);
-		} else {
-			SSA_PR_LOG_ERROR("Port is not found. LID: 0x%"SCNx16,ntohs(lid));
 		}
+	} else {
+		port_index = p_index->ca_port_lookup[ntohs(lid)];
 	}
 
-	return p_port_tbl + GPOINTER_TO_INT(value);
+	if(port_index >= count) {
+		SSA_PR_LOG_ERROR("Port is not found. LID: 0x%"SCNx16" Port num: %d",
+				ntohs(lid),port_num);
+		return NULL;
+	}
+	return p_port_tbl + port_index;
 }
 
 const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,

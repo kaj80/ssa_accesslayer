@@ -44,6 +44,7 @@ struct ssa_pr_smdb_index {
 	uint8_t is_switch_lookup[MAX_LOOKUP_LID];
 	uint16_t lft_top_lookup[MAX_LOOKUP_LID];
 	uint64_t* lft_block_lookup[MAX_LOOKUP_LID];
+	uint64_t ca_port_lookup[MAX_LOOKUP_LID];
 	GHashTable *lft_block_hash;
 	GHashTable *port_hash;
 	GHashTable *link_hash;
