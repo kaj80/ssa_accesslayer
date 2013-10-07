@@ -132,6 +132,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_context);
 
+
 	if(ssa_pr_rebuild_indexes(p_context->p_index,p_ssa_db_smdb)) {
 		SSA_PR_LOG_ERROR("Index rebuild is failed.");
 		return SSA_PR_ERROR;
@@ -153,6 +154,9 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	source_last_lid = source_base_lid + pow(2,p_source_rec->lmc) - 1;
 
 	for(source_lid = source_base_lid; source_lid <= source_last_lid; ++source_lid) {
+		SSA_PR_LOG_DEBUG("Compute \"half world\" path records for: 0x%"SCNx16,
+				source_lid);
+
 		for (i = 0; i < guid_to_lid_count; i++) {
 			uint16_t dest_base_lid = 0;
 			uint16_t dest_last_lid = 0;
@@ -171,8 +175,6 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 				path_prm.to_guid = p_dest_rec->guid;
 				path_prm.to_lid = htons(dest_lid);
 
-				SSA_PR_LOG_DEBUG("Search for path: (0x%"SCNx16") -> (0x%"SCNx16")",
-						source_lid,dest_lid);
 
 				path_res = ssa_pr_path_params(p_ssa_db_smdb,p_context,
 						p_source_rec,p_dest_rec,&path_prm);
@@ -317,7 +319,7 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 					"Path record calculation is sttoped."
 					,htons(p_dest_rec->lid),htons(p_source_rec->lid));
 			return SSA_PR_ERROR;
-		} else if(LFT_NO_PATH == source_port_num) {
+		} else if(LFT_NO_PATH == out_port_num) {
 			SSA_PR_LOG_DEBUG("There is no path from LID: 0x%"SCNx16" to LID: 0x%"SCNx16" .",
 					htons(p_source_rec->lid),htons(p_dest_rec->lid));
 			return SSA_PR_NO_PATH;
