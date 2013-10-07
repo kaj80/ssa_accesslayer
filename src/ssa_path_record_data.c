@@ -197,26 +197,30 @@ static int build_link_index(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_ssa_pr_smdb_index);
 	SSA_ASSERT(p_ssa_pr_smdb_index->is_switch_lookup);
-	SSA_ASSERT(!p_ssa_pr_smdb_index->link_hash);
+
+	memset(p_ssa_pr_smdb_index->ca_link_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint64_t));
+	memset(p_ssa_pr_smdb_index->switch_link_lookup,'\0',MAX_LOOKUP_PORT * sizeof(uint64_t*));
 
 	p_link_tbl = (const struct ep_link_tbl_rec*)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LINK];
 	SSA_ASSERT(p_link_tbl);
 
-	p_ssa_pr_smdb_index->link_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
-	if(!p_ssa_pr_smdb_index->link_hash) {
-		int errsv = errno;
-		SSA_PR_LOG_ERROR("GLib hash table creation is failed");
-		return -1;
-	}
-
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LINK);
 
 	for (i = 0; i < count; i++) {
-		g_hash_table_insert(p_ssa_pr_smdb_index->link_hash,
-				be16uint8_key(p_link_tbl[i].from_lid,
-					p_ssa_pr_smdb_index->is_switch_lookup[ntohs(p_link_tbl[i].from_lid)]?
-					p_link_tbl[i].from_port_num:NO_REAL_PORT_NUM),
-				GINT_TO_POINTER(i));
+		if(p_ssa_pr_smdb_index->is_switch_lookup[ntohs(p_link_tbl[i].from_lid)]) {
+			uint64_t *port_lookup = p_ssa_pr_smdb_index->switch_link_lookup[ntohs(p_link_tbl[i].from_lid)];
+			if(!port_lookup) {
+				size_t j = 0;
+				port_lookup = (uint64_t*)malloc(MAX_LOOKUP_PORT * sizeof(uint64_t));
+				p_ssa_pr_smdb_index->switch_link_lookup[ntohs(p_link_tbl[i].from_lid)] = port_lookup;
+				for(j = 0;j < MAX_LOOKUP_PORT;++j)
+					port_lookup[j] = count + 1;
+			}
+			port_lookup[p_link_tbl[i].from_port_num] = i;
+		}
+		else {
+			p_ssa_pr_smdb_index->ca_link_lookup[ntohs(p_link_tbl[i].from_lid)] = i;
+		}
 	}
 
 	return 0;
@@ -275,11 +279,11 @@ void ssa_pr_destroy_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index)
 		free(p_ssa_pr_smdb_index->switch_port_lookup[i]);
 	memset(p_ssa_pr_smdb_index->switch_port_lookup,'\0',MAX_LOOKUP_PORT * sizeof(uint64_t*));
 
-	if(p_ssa_pr_smdb_index->link_hash) {
-		g_hash_table_destroy(p_ssa_pr_smdb_index->link_hash);
-		p_ssa_pr_smdb_index->link_hash = NULL;
-	}
-	
+	memset(p_ssa_pr_smdb_index->ca_link_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint64_t));
+	for(i = 0; i < MAX_LOOKUP_LID; ++i)
+		free(p_ssa_pr_smdb_index->switch_link_lookup[i]);
+	memset(p_ssa_pr_smdb_index->switch_link_lookup,'\0',MAX_LOOKUP_PORT * sizeof(uint64_t*));
+
 	for(i = 0; i < MAX_LOOKUP_LID; ++i) {
 		if(p_ssa_pr_smdb_index->lft_block_lookup[i])
 			free(p_ssa_pr_smdb_index->lft_block_lookup[i]);
@@ -364,9 +368,6 @@ int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 	size_t lft_port_shift = 0;
 	size_t lft_block_index = 0;
 
-	gpointer value = NULL;
-	gpointer org_key = NULL;
-
 	uint16_t lft_top = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
@@ -415,8 +416,6 @@ const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 	size_t i = 0;
 	const struct ep_port_tbl_rec  *p_port_tbl = NULL;
 	size_t count = 0;
-	gpointer value = NULL;
-	gpointer org_key = NULL;
 	size_t port_index = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
@@ -457,33 +456,40 @@ const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,
 	size_t i = 0;
 	const struct ep_link_tbl_rec *p_link_tbl =  NULL;
 	size_t link_count = 0;
-	gpointer value = NULL;
-	gpointer org_key = NULL;
-	gboolean res = 0;
+	size_t record_index = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_index);
-	SSA_ASSERT(p_index->port_hash);
 	SSA_ASSERT(p_index->is_switch_lookup);
 	SSA_ASSERT(lid);
 
 	p_link_tbl = (const struct ep_link_tbl_rec*)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LINK];
 	SSA_ASSERT(p_link_tbl);
 
-	res = g_hash_table_lookup_extended(p_index->link_hash,
-			be16uint8_key(lid,p_index->is_switch_lookup[ntohs(lid)] ?
-				port_num : NO_REAL_PORT_NUM),&org_key,&value);
+	if(p_index->is_switch_lookup[ntohs(lid)]) {
+		uint64_t *port_lookup = p_index->switch_link_lookup[ntohs(lid)];
+		if(!port_lookup) {
+			SSA_PR_LOG_ERROR("Link is not found. LID: 0x%"SCNx16" Port num: %u",
+					ntohs(lid),port_num);
+			return NULL;
+		}
+		record_index = port_lookup[port_num];
+	}
+	else {
+		record_index = p_index->ca_link_lookup[ntohs(lid)];
+	}
 
 	link_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LINK);
 
-	if(!res || GPOINTER_TO_INT(value) >= link_count) {
+	if(record_index >= link_count) {
 		if(port_num >= 0) {
 			SSA_PR_LOG_ERROR("Link is not found. LID: 0x%"SCNx16" Port num: %u",
 					ntohs(lid),port_num);
 		} else {
 			SSA_PR_LOG_ERROR("Link is not found. LID: 0x%"SCNx16,ntohs(lid));
 		}
+		return NULL;
 	}
 
-	return p_link_tbl + GPOINTER_TO_INT(value);
+	return p_link_tbl + record_index;
 }
