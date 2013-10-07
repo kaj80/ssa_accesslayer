@@ -70,19 +70,12 @@ static int build_is_switch_lookup(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_ssa_pr_smdb_index);
-	SSA_ASSERT(!p_ssa_pr_smdb_index->is_switch_lookup);
 
 	p_guid_to_lid_tbl = 
 		(struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
 	SSA_ASSERT(p_guid_to_lid_tbl);
 
-	p_ssa_pr_smdb_index->is_switch_lookup = (uint8_t*)malloc(0xFFFF);
-	if(!p_ssa_pr_smdb_index->is_switch_lookup) {
-		int errsv = errno;
-		SSA_PR_LOG_ERROR("Memory allocation error %d ",errsv);
-		return -1;
-	}
-	memset(p_ssa_pr_smdb_index->is_switch_lookup,'\0',0xFFFF);
+	memset(p_ssa_pr_smdb_index->is_switch_lookup,'\0',MAX_LOOKUP_LID);
 
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
 
@@ -102,19 +95,12 @@ static int build_lft_top_lookup(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_ssa_pr_smdb_index);
-	SSA_ASSERT(!p_ssa_pr_smdb_index->lft_top_lookup);
 
 	p_lft_top_tbl = 
 		(struct ep_lft_top_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LFT_TOP];
 	SSA_ASSERT(p_lft_top_tbl );
 
-	p_ssa_pr_smdb_index->lft_top_lookup = (uint16_t*)malloc(0xFFFF*sizeof(uint16_t));
-	if(!p_ssa_pr_smdb_index->lft_top_lookup) {
-		int errsv = errno;
-		SSA_PR_LOG_ERROR("Memory allocation error %d ",errsv);
-		return -1;
-	}
-	memset(p_ssa_pr_smdb_index->lft_top_lookup,'\0',0xFFFF*sizeof(uint16_t));
+	memset(p_ssa_pr_smdb_index->lft_top_lookup,'\0',MAX_LOOKUP_LID*sizeof(uint16_t));
 
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LFT_TOP);
 
@@ -158,35 +144,41 @@ static int build_port_index(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 	return 0;
 }
 
-static int build_lft_block_index(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
+static int build_lft_block_lookup(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 		const struct ssa_db_smdb *p_ssa_db_smdb)
 {
 	size_t i = 0, count = 0;
 	const struct ep_lft_block_tbl_rec *p_lft_block_tbl = NULL;
+	size_t lookup_size = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_ssa_pr_smdb_index);
-	SSA_ASSERT(!p_ssa_pr_smdb_index->lft_block_hash);
 
 	p_lft_block_tbl =(struct ep_lft_block_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LFT_BLOCK];
 	SSA_ASSERT(p_lft_block_tbl);
 
-	p_ssa_pr_smdb_index->lft_block_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
-	if(!p_ssa_pr_smdb_index->lft_block_hash) {
-		int errsv = errno;
-		SSA_PR_LOG_ERROR("GLib hash table creation is failed");
-		return -1;
-	}
+	memset(p_ssa_pr_smdb_index->lft_block_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint64_t*));
 
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LFT_BLOCK);
 
 	for (i = 0; i < count; i++) {
-		g_hash_table_insert(p_ssa_pr_smdb_index->lft_block_hash,
-				be16b16_key(p_lft_block_tbl[i].lid,
-					p_lft_block_tbl[i].block_num),
-					GINT_TO_POINTER(i));
+		size_t j = 0;
+		uint64_t *block_lookup = 
+			p_ssa_pr_smdb_index->lft_block_lookup[ntohs(p_lft_block_tbl[i].lid)];
+		if(!block_lookup) {
+			block_lookup = (uint64_t*)malloc(MAX_LFT_BLOCK_MUM * sizeof(uint64_t));
+			lookup_size += MAX_LFT_BLOCK_MUM * sizeof(uint64_t);
+
+			p_ssa_pr_smdb_index->lft_block_lookup[ntohs(p_lft_block_tbl[i].lid)] =
+				block_lookup;
+
+			for(j = 0; j < MAX_LFT_BLOCK_MUM; ++j)
+				block_lookup[j] = count + 1;
+		}
+		block_lookup[ntohs(p_lft_block_tbl[i].block_num)] = i;
 	}
 
+	SSA_PR_LOG_INFO("LFT lookup size: %u bytes",lookup_size);
 	return 0;
 }
 static int build_link_index(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
@@ -246,9 +238,9 @@ int ssa_pr_build_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 		SSA_PR_LOG_ERROR("Build for port index is failed");
 		return res;
 	}
-	res = build_lft_block_index(p_ssa_pr_smdb_index,p_ssa_db_smdb);
+	res = build_lft_block_lookup(p_ssa_pr_smdb_index,p_ssa_db_smdb);
 	if(res) {
-		SSA_PR_LOG_ERROR("Build for lft block index is failed");
+		SSA_PR_LOG_ERROR("Build for lft block lookup is failed");
 		return res;
 	}
 	res = build_link_index(p_ssa_pr_smdb_index,p_ssa_db_smdb);
@@ -263,18 +255,14 @@ int ssa_pr_build_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index,
 
 void ssa_pr_destroy_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index)
 {
+	size_t i = 0;
+
 	SSA_ASSERT(p_ssa_pr_smdb_index);
 
-	if(p_ssa_pr_smdb_index->is_switch_lookup) {
-		free(p_ssa_pr_smdb_index->is_switch_lookup);
-		p_ssa_pr_smdb_index->is_switch_lookup = NULL;
-	}
+	memset(p_ssa_pr_smdb_index->is_switch_lookup,'\0',MAX_LOOKUP_LID);
 
-	if(p_ssa_pr_smdb_index->lft_top_lookup) {
-		free(p_ssa_pr_smdb_index->lft_top_lookup);
-		p_ssa_pr_smdb_index->lft_top_lookup = NULL;
-	}
-	
+	memset(p_ssa_pr_smdb_index->lft_top_lookup ,'\0',MAX_LOOKUP_LID * sizeof(uint16_t));
+
 	if(p_ssa_pr_smdb_index->port_hash) {
 		g_hash_table_destroy(p_ssa_pr_smdb_index->port_hash);
 		p_ssa_pr_smdb_index->port_hash = NULL;
@@ -284,11 +272,12 @@ void ssa_pr_destroy_indexes(struct ssa_pr_smdb_index *p_ssa_pr_smdb_index)
 		g_hash_table_destroy(p_ssa_pr_smdb_index->link_hash);
 		p_ssa_pr_smdb_index->link_hash = NULL;
 	}
-
-	if(p_ssa_pr_smdb_index->lft_block_hash) {
-		g_hash_table_destroy(p_ssa_pr_smdb_index->lft_block_hash);
-		p_ssa_pr_smdb_index->lft_block_hash = NULL;
+	
+	for(i = 0; i < MAX_LOOKUP_LID; ++i) {
+		if(p_ssa_pr_smdb_index->lft_block_lookup[i])
+			free(p_ssa_pr_smdb_index->lft_block_lookup[i]);
 	}
+	memset(p_ssa_pr_smdb_index->lft_block_lookup,'\0',MAX_LOOKUP_LID * sizeof(uint16_t*));
 
 	p_ssa_pr_smdb_index->epoch = -1;
 }
@@ -362,9 +351,11 @@ int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 	size_t i = 0;
 
 	struct ep_lft_block_tbl_rec *p_lft_block_tbl = NULL;
+	size_t lft_block_count = 0;
 
 	size_t lft_block_num = 0;
-	size_t lft_port_num = 0;
+	size_t lft_port_shift = 0;
+	size_t lft_block_index = 0;
 
 	gpointer value = NULL;
 	gpointer org_key = NULL;
@@ -373,16 +364,21 @@ int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(p_index);
-	SSA_ASSERT(p_index->lft_top_lookup);
-	SSA_ASSERT(p_index->lft_block_hash);
 	SSA_ASSERT(source_lid);
 	SSA_ASSERT(dest_lid);
 
 	p_lft_block_tbl =(struct ep_lft_block_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_LFT_BLOCK];
 	SSA_ASSERT(p_lft_block_tbl);
 
-	lft_block_num = floorl(ntohs(dest_lid) / IB_SMP_DATA_SIZE);
-	lft_port_num = ntohs(dest_lid) % IB_SMP_DATA_SIZE;
+	lft_block_count  = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LFT_BLOCK);
+
+	/*
+	 * Optimisation. If IB_SMP_DATA_SIZE is power of 2 we can use shift istead of division
+	 *
+	 *  lft_block_num = floorl(ntohs(dest_lid) / IB_SMP_DATA_SIZE);
+	 */
+	lft_block_num = ntohs(dest_lid) >> 6;
+	lft_port_shift = ntohs(dest_lid) % IB_SMP_DATA_SIZE;
 	lft_top = p_index->lft_top_lookup[ntohs(source_lid)];
 
 	if(ntohs(dest_lid) > lft_top) {
@@ -392,13 +388,16 @@ int find_destination_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 		return -1;
 	}
 
-	if(g_hash_table_lookup_extended(p_index->lft_block_hash,be16b16_key(source_lid,htons(lft_block_num)),&org_key,&value)) {
-		if(LFT_NO_PATH != p_lft_block_tbl[GPOINTER_TO_INT(value)].block[lft_port_num]) {
-			return p_lft_block_tbl[GPOINTER_TO_INT(value)].block[lft_port_num];
-		}
+	if (!p_index->lft_block_lookup[ntohs(source_lid)] || 
+			p_index->lft_block_lookup[ntohs(source_lid)][lft_block_num] > lft_block_count) {
+		SSA_PR_LOG_ERROR("LFT routing is failed. Destination LID exceeds LFT top . "
+				"Source LID (0x%"SCNx16") Destination LID: (0x%"SCNx16") LFT top: %u",
+			ntohs(source_lid),ntohs(dest_lid),lft_top);
+		return -1;
 	}
 
-	return LFT_NO_PATH ;
+	lft_block_index = p_index->lft_block_lookup[ntohs(source_lid)][lft_block_num];
+	return p_lft_block_tbl[lft_block_index].block[lft_port_shift];
 }
 
 const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
@@ -409,8 +408,8 @@ const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_ssa_db_smdb,
 	size_t i = 0;
 	const struct ep_port_tbl_rec  *p_port_tbl = NULL;
 	size_t count = 0;
-	gpointer value= NULL;
-	gpointer org_key= NULL;
+	gpointer value = NULL;
+	gpointer org_key = NULL;
 	gboolean res = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
@@ -446,10 +445,10 @@ const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,
 		const int port_num)
 {
 	size_t i = 0;
-	const struct ep_link_tbl_rec  *p_link_tbl =  NULL;
+	const struct ep_link_tbl_rec *p_link_tbl =  NULL;
 	size_t link_count = 0;
-	gpointer value= NULL;
-	gpointer org_key= NULL;
+	gpointer value = NULL;
+	gpointer org_key = NULL;
 	gboolean res = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
@@ -462,8 +461,8 @@ const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,
 	SSA_ASSERT(p_link_tbl);
 
 	res = g_hash_table_lookup_extended(p_index->link_hash,
-			be16uint8_key(lid,p_index->is_switch_lookup[ntohs(lid)]?
-				port_num:NO_REAL_PORT_NUM),&org_key,&value);
+			be16uint8_key(lid,p_index->is_switch_lookup[ntohs(lid)] ?
+				port_num : NO_REAL_PORT_NUM),&org_key,&value);
 
 	link_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_LINK);
 
@@ -476,5 +475,5 @@ const struct ep_link_tbl_rec *find_link(const struct ssa_db_smdb *p_ssa_db_smdb,
 		}
 	}
 
-	return p_link_tbl  + GPOINTER_TO_INT(value);
+	return p_link_tbl + GPOINTER_TO_INT(value);
 }
