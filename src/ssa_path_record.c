@@ -340,24 +340,11 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 	}
 
 	while(port != dest_port) {
-		const struct ep_link_tbl_rec *link_rec = find_link(p_ssa_db_smdb,p_context->p_index,
-				port->port_lid,
-				port->rate &  SSA_DB_PORT_IS_SWITCH_MASK ? port->port_num:-1);
 		int out_port_num = -1;
 
-		if(NULL == link_rec) {
-			SSA_PR_LOG_ERROR("There is no link from port LID: 0x%"SCNx16" num: %u. "
-					"Path record calculation is stopped",
-					ntohs(port->port_lid),
-					port->port_num);
-			return SSA_PR_ERROR;
-		}
-
-		port = find_port(p_ssa_db_smdb,p_context->p_index,
-				link_rec->to_lid,link_rec->to_port_num);
+		port = find_link_port(p_ssa_db_smdb,p_context->p_index,port->port_lid,port->port_num);
 		if(NULL == port) {
-			SSA_PR_LOG_ERROR("Port is not found. Path record calculation is stopped."
-					" LID: 0x%"SCNx16" num: %u",htons(link_rec->to_lid),link_rec->to_port_num);
+			SSA_PR_LOG_ERROR("Port is not found. Path record calculation is stopped.");
 			return SSA_PR_ERROR;
 		}
 
@@ -380,18 +367,18 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 		if(ib_path_compare_rates(p_path_prm->rate,port->rate & SSA_DB_PORT_RATE_MASK) > 0)
 			p_path_prm->rate = port->rate & SSA_DB_PORT_RATE_MASK;
 
-		out_port_num  = find_destination_port(p_ssa_db_smdb,p_context->p_index,link_rec->to_lid,p_dest_rec->lid);
+		out_port_num  = find_destination_port(p_ssa_db_smdb,p_context->p_index,port->port_lid,p_dest_rec->lid);
 		if(LFT_NO_PATH == out_port_num){
 			SSA_PR_LOG_DEBUG("There is no path from LID: 0x%"SCNx16" to LID: 0x%"SCNx16" .",
 					htons(p_source_rec->lid),htons(p_dest_rec->lid));
 			return SSA_PR_NO_PATH;
 		}
 
-		port = find_port(p_ssa_db_smdb,p_context->p_index,link_rec->to_lid,out_port_num);
+		port = find_port(p_ssa_db_smdb,p_context->p_index,port->port_lid,out_port_num);
 		if(NULL == port) {
 			SSA_PR_LOG_ERROR("Port is not found. Path record calculation is stopped."
 					" LID: 0x%"SCNx16" num: %u",
-					htons(link_rec->to_lid),out_port_num);
+					htons(port->port_lid),out_port_num);
 			return SSA_PR_ERROR;
 		}
 
