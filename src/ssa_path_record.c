@@ -127,6 +127,8 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	uint16_t source_last_lid = 0;
 	uint16_t source_lid = 0;
 	struct ssa_pr_context *p_context = (struct ssa_pr_context *)p_ctnx;
+	clock_t start, end;
+	double cpu_time_used;
 
 	SSA_ASSERT(port_guid);
 	SSA_ASSERT(p_ssa_db_smdb);
@@ -154,9 +156,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	source_last_lid = source_base_lid + pow(2,p_source_rec->lmc) - 1;
 
 	for(source_lid = source_base_lid; source_lid <= source_last_lid; ++source_lid) {
-		SSA_PR_LOG_DEBUG("Compute \"half world\" path records for: 0x%"SCNx16,
-				source_lid);
-
+		start = clock();
 		for (i = 0; i < guid_to_lid_count; i++) {
 			uint16_t dest_base_lid = 0;
 			uint16_t dest_last_lid = 0;
@@ -207,6 +207,10 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 				} 
 			}
 		}
+		end = clock();
+		cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+		SSA_PR_LOG_DEBUG("\"half world\" path records for: 0x%"SCNx16
+				" time: %.5f sec.",source_lid,cpu_time_used );
 	}
 	return SSA_PR_SUCCESS;
 }
