@@ -342,7 +342,7 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 	while(port != dest_port) {
 		int out_port_num = -1;
 
-		port = find_link_port(p_ssa_db_smdb,p_context->p_index,port->port_lid,port->port_num);
+		port = find_linked_port(p_ssa_db_smdb,p_context->p_index,port->port_lid,port->port_num);
 		if(NULL == port) {
 			SSA_PR_LOG_ERROR("Port is not found. Path record calculation is stopped.");
 			return SSA_PR_ERROR;
