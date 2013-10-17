@@ -267,7 +267,7 @@ Error:
 
 /** =========================================================================
  */
-void ssa_prdbdb_destroy(struct ssa_prdb * p_prdb)
+void ssa_prdb_destroy(struct ssa_prdb * p_prdb)
 {
 	int i;
 

@@ -85,9 +85,9 @@ struct ssa_prdb {
 	void                            *p_tables[SSA_PR_TABLE_ID_MAX];
 };
 
-struct ssa_prdb *ssa_prdb_create(uint64_t num_recs);
+extern struct ssa_prdb *ssa_prdb_create(uint64_t num_recs);
 
-void ssa_prdb_destroy(struct ssa_prdb * p_prdb);
+extern void ssa_prdb_destroy(struct ssa_prdb * p_prdb);
 
 
 
