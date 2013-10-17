@@ -239,20 +239,30 @@ static void ssa_prdb_tables_init(struct ssa_prdb * p_prdb)
 
 /** =========================================================================
  */
-struct ssa_prdb ssa_prdb_init(uint64_t num_recs)
+struct ssa_prdb *ssa_prdb_create(uint64_t num_recs)
 {
-	struct ssa_prdb  prdb;
+	struct ssa_prdb  *p_prdb = NULL;
 
-	ssa_prdb_tables_init(&prdb);
+	p_prdb = (struct ssa_prdb*)malloc(sizeof(struct ssa_prdb));
+	if(!p_prdb)
+		return NULL;
 
-	prdb.p_tables[SSA_PR_TABLE_ID] =
+	ssa_prdb_tables_init(p_prdb);
+
+	p_prdb->p_tables[SSA_PR_TABLE_ID] =
 		malloc(sizeof(struct ep_pr_tbl_rec) * num_recs);
 
-	if (!prdb.p_tables[SSA_PR_TABLE_ID]) {
-		/* TODO: add handling memory allocation failure */
+	if (!p_prdb->p_tables[SSA_PR_TABLE_ID]) {
+		goto Error;
 	}
 
-	return prdb;
+	return p_prdb;
+Error: 
+	if(p_prdb) {
+		free(p_prdb);
+		p_prdb = NULL;
+	}
+	return NULL;
 }
 
 /** =========================================================================
