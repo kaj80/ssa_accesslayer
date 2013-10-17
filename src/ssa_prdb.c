@@ -48,11 +48,11 @@ static const struct db_dataset dataset_tbl[] = {
 static const struct db_field_def field_tbl[] = {
 	{ 1, 0, DBF_TYPE_NET64, 0, { 0,SSA_PR_TABLE_ID,SSA_PR_FIELD_ID_PR_DGUID}, "guid", __constant_htonl(64), 0 },
 	{ 1, 0, DBF_TYPE_NET16, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_DLID }, "lid", __constant_htonl(16), __constant_htonl(64) },
-	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_MTU }, "mtu", __constant_htonl(8), __constant_htonl(80) },
-	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_RATE }, "rate", __constant_htonl(8), __constant_htonl(88) },
-	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_SL }, "sl", __constant_htonl(8), __constant_htonl(96) },
-	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_PK }, "pk", __constant_htonl(8), __constant_htonl(104) },
-	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_REVERSIBLE }, "is_reversible", __constant_htonl(8), __constant_htonl(112) },
+	{ 1, 0, DBF_TYPE_NET16, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_PK }, "pk", __constant_htonl(16), __constant_htonl(80) },
+	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_MTU }, "mtu", __constant_htonl(8), __constant_htonl(96) },
+	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_RATE }, "rate", __constant_htonl(8), __constant_htonl(104) },
+	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_SL }, "sl", __constant_htonl(8), __constant_htonl(112) },
+	{ 1, 0, DBF_TYPE_U8, 0, { 0, SSA_PR_TABLE_ID, SSA_PR_FIELD_ID_PR_REVERSIBLE }, "is_reversible", __constant_htonl(8), __constant_htonl(120) },
 	{ 0 }
 };
 
