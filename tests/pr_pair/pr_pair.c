@@ -270,7 +270,7 @@ static struct ssa_db_smdb *load_smdb(const char *path)
 	print_memory_usage("Memory usage before the database loading: ");
 
 	start = clock();
-	db_diff = ssa_db_load(path,SSA_DB_HELPER_DEBUG);
+	db_diff = ssa_db_load(path,SSA_DB_HELPER_SMDB,SSA_DB_HELPER_DEBUG);
 	end = clock();
 	cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	if(NULL != db_diff) {
