@@ -39,6 +39,7 @@
 #include <assert.h>
 #include <math.h>
 #include <ssa_smdb.h>
+#include <ssa_prdb.h>
 #include "ssa_path_record.h"
 #include "ssa_path_record_helper.h"
 #include "ssa_path_record_data.h"
@@ -64,17 +65,6 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 		ssa_path_parms_t *p_path_prm);
 
 
-/*
- * According to profiling results,ib_path_compare_rates takes about
- * 7% of overall path record computation time.
- * ib_path_compare_rates_fast is a fast version of ib_path_compare_rates that use staic lookup
- *  table with precomputed results. It used for performance optimisation in 
- * the path records algorithm.
- */
-static inline int ib_path_compare_rates_fast(IN const int rate1, IN const int rate2)
-{
-	return rates_cmp_table[rate1][rate2];
-}
 
 inline static size_t get_dataset_count(const struct ssa_db_smdb *p_ssa_db_smdb,
 		unsigned int table_id)
@@ -84,6 +74,40 @@ inline static size_t get_dataset_count(const struct ssa_db_smdb *p_ssa_db_smdb,
 	SSA_ASSERT(&p_ssa_db_smdb->db_tables[table_id]);
 
 	return ntohll(p_ssa_db_smdb->db_tables[table_id].set_count);
+}
+
+static void insert_pr_to_prdb(const ssa_path_parms_t *p_path_prm, void *prm)
+{
+	struct ssa_prdb *p_prdb = NULL;
+	struct db_dataset *p_dataset = NULL;
+	uint64_t set_size = 0, set_count = 0;
+	struct ep_pr_tbl_rec *p_rec = NULL;
+
+	p_prdb = (struct ssa_prdb*)prm;
+	SSA_ASSERT(p_prdb);
+
+	p_dataset = p_prdb->db_tables +SSA_PR_TABLE_ID;
+	SSA_ASSERT(p_dataset);
+
+	set_size = ntohll(p_dataset->set_size);
+	set_count = ntohll(p_dataset->set_count);
+
+	p_rec = ((struct ep_pr_tbl_rec *)p_prdb->p_tables[SSA_PR_TABLE_ID]) + set_count;
+	SSA_ASSERT(p_rec);
+
+	p_rec->guid = p_path_prm->to_guid;
+	p_rec->lid = p_path_prm->to_lid;
+	p_rec->pk = p_path_prm->pkey;
+	p_rec->mtu = p_path_prm->mtu;
+	p_rec->rate = p_path_prm->rate;
+	p_rec->sl = p_path_prm->sl;
+	p_rec->is_reversible = p_path_prm->reversible;
+
+	set_size += sizeof(struct ep_pr_tbl_rec);
+	set_count++;
+
+	p_dataset->set_count = htonll(set_count);
+	p_dataset->set_size = htonll(set_size);
 }
 
 ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb, 
@@ -189,6 +213,53 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	return SSA_PR_SUCCESS;
 }
 										
+struct ssa_prdb *ssa_pr_compute_half_world(struct ssa_db_smdb *p_ssa_db_smdb, 
+		void * p_ctnx,
+		be64_t port_guid)
+{
+	struct ssa_prdb *p_prdb = NULL;
+	uint64_t record_num = 0;
+	size_t guid_to_lid_count = 0;
+	const struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl = NULL;
+	const struct ep_guid_to_lid_tbl_rec *p_curr_rec = NULL;
+	size_t i = 0;
+	ssa_pr_status_t res = SSA_PR_SUCCESS;
+
+	SSA_ASSERT(p_ssa_db_smdb);
+
+	p_guid_to_lid_tbl = (const struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
+	SSA_ASSERT(p_guid_to_lid_tbl);
+
+	guid_to_lid_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
+
+	for(i = 0;i < guid_to_lid_count;++i) {
+		p_curr_rec = p_guid_to_lid_tbl + i;
+		record_num += pow(2,p_curr_rec ->lmc);
+	}
+
+	p_prdb = ssa_prdb_create(record_num);
+	if(!p_prdb) {
+		SSA_PR_LOG_ERROR("Path record database creation is failed."
+				" Number of records: %ll",record_num);
+		return NULL;
+	}
+
+	res = ssa_pr_half_world(p_ssa_db_smdb,p_ctnx,port_guid,insert_pr_to_prdb,p_prdb);
+	if (SSA_PR_ERROR == res) {
+		SSA_PR_LOG_ERROR("\"Half world\" calculation is failed for GUID: 0x%"PRIx64
+				,ntohll(port_guid));
+		goto Error;
+	}
+	return p_prdb;
+Error:
+	if(p_prdb) {
+		ssa_prdb_destroy(p_prdb);
+		free(p_prdb);
+		p_prdb = NULL;
+		return NULL;
+	}
+}
+
 ssa_pr_status_t ssa_pr_whole_world(struct ssa_db_smdb* p_ssa_db_smdb, 
 		void * context,
 		ssa_pr_path_dump_t dump_clbk,
