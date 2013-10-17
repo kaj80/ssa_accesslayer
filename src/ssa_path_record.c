@@ -64,17 +64,6 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 		ssa_path_parms_t *p_path_prm);
 
 
-/*
- * According to profiling results,ib_path_compare_rates takes about
- * 7% of overall path record computation time.
- * ib_path_compare_rates_fast is a fast version of ib_path_compare_rates that use staic lookup
- *  table with precomputed results. It used for performance optimisation in 
- * the path records algorithm.
- */
-static inline int ib_path_compare_rates_fast(IN const int rate1, IN const int rate2)
-{
-	return rates_cmp_table[rate1][rate2];
-}
 
 inline static size_t get_dataset_count(const struct ssa_db_smdb *p_ssa_db_smdb,
 		unsigned int table_id)
