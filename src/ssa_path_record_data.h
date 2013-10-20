@@ -37,7 +37,7 @@
 #define LFT_NO_PATH 255
 #define MAX_LOOKUP_LID 0xBFFF
 #define MAX_LOOKUP_PORT 254
-#define MAX_LFT_BLOCK_MUM (MAX_LOOKUP_LID/64)
+#define MAX_LFT_BLOCK_NUM (MAX_LOOKUP_LID/64)
 #define NO_REAL_PORT_NUM -1
 
 /*
@@ -54,14 +54,14 @@
  *                    The table allow lookup by pair (LID,block num).
  *                    Index is a LID.
  *                    If a LID is CA, the corresponded value in lft_block_lookup  is NULL.
- *                    If not, the value is pointer to dinamycally allocated lookup 
- *                    table for switch's LFT blocks. The table's length is MAX_LFT_BLOCK_MUM .
+ *                    If not, the value is pointer to dynamically allocated lookup 
+ *                    table for switch's LFT blocks. The table's length is MAX_LFT_BLOCK_NUM .
  *@ca_port_lookup - lookup table for CA ports. 
  *                  Index: LID , value: index in SSA_TABLE_ID_PORT table.
  *@switch_port_lookup - lookup table for switch ports. The table allow lookup by pair (LID,port num).
  *						Index is a LID.
  *                      If a LID is CA, the corresponded value in switch_port_lookup is NULL.
- *                      If not, the value is pointer to dinamycally allocated lookup 
+ *                      If not, the value is pointer to dynamically allocated lookup 
  *                      table for switch's ports. The table's length is MAX_LOOKUP_PORT.
  *                      
  *@ca_link_lookup - lookup table for links from CA. 
@@ -70,7 +70,7 @@
  *                      The table allow lookup by pair (LID,port num).
  *						Index is a LID.
  *                      If a LID is CA, the corresponded value in switch_link_lookup is NULL.
- *                      If not, the value is pointer to dinamycally allocated lookup 
+ *                      If not, the value is pointer to dynamically allocated lookup 
  *                      table for switch's links. The table's length is MAX_LOOKUP_PORT.
  */
 struct ssa_pr_smdb_index {
@@ -111,7 +111,7 @@ extern void ssa_pr_destroy_indexes(struct ssa_pr_smdb_index *p_index);
  *
  * @return value: 0 - success; otherwise - failure
  *
- * The function rebuilds a smdb index if needed. The desicion rebuild or not
+ * The function rebuilds a smdb index if needed. The decision rebuild or not
  * is based on epoch of index and database.
  **/
 extern int ssa_pr_rebuild_indexes(struct ssa_pr_smdb_index *p_index,
@@ -119,7 +119,7 @@ extern int ssa_pr_rebuild_indexes(struct ssa_pr_smdb_index *p_index,
 
 /**
  * find_guid_to_lid_rec_by_guid - search in SSA_TABLE_ID_GUID_TO_LID table
- * @p_smdb: Pointer to a smdb databse.
+ * @p_smdb: Pointer to a smdb database.
  * @port_guid: GUID in network order.
  *
  * @return value: pointer to found record. NULL - failure.
@@ -133,7 +133,7 @@ extern const struct ep_guid_to_lid_tbl_rec
 
 /**
  * find_port - search in SSA_TABLE_ID_PORT table
- * @p_smdb: Pointer to a smdb databse.
+ * @p_smdb: Pointer to a smdb database.
  * @p_index: Pointer to a smdb index. It's used for boot retrieval operations 
  * @lid: LID in network order.
  * @port_num: Port number. For CA the parameter is not relevant.
@@ -149,7 +149,7 @@ extern const struct ep_port_tbl_rec *find_port(const struct ssa_db_smdb *p_smdb,
 
 /**
  * find_destination_port - search in SSA_TABLE_ID_LFT_BLOCK table
- * @p_smdb: Pointer to a smdb databse.
+ * @p_smdb: Pointer to a smdb database.
  * @p_index: Pointer to a smdb index. It's used for boot retrieval operations 
  * @source_lid: switch's LID in network order
  * @dest_lid: destination LID in network order
@@ -165,7 +165,7 @@ extern int find_destination_port(const struct ssa_db_smdb *p_smdb,
 
 /**
  * find_linked_port - search in SSA_TABLE_ID_LINK table for a linked port
- * @p_smdb: Pointer to a smdb databse.
+ * @p_smdb: Pointer to a smdb database.
  * @p_index: Pointer to a smdb index. It's used for boot retrieval operations 
  * @from_lid: source LID in network order.
  * @from_port_num: source port number. For CA the parameter is not relevant.
