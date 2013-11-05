@@ -37,6 +37,7 @@
 #include <stdint.h>
 #include <byteswap.h>
 #include <infiniband/umad.h>
+#include <ssa_db.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -81,17 +82,17 @@ extern void ssa_pr_destroy_context(void * ctx);
  * @port_guid		- input GUID
  * 
  * */
-extern struct ssa_prdb *ssa_pr_compute_half_world(struct ssa_db_smdb *p_ssa_db_smdb, 
+extern struct ssa_db *ssa_pr_compute_half_world(struct ssa_db *p_ssa_db_smdb, 
 		void *p_ctnx,
 		be64_t port_guid);
 
-extern ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb* p_ssa_db_smdb, 
+extern ssa_pr_status_t ssa_pr_half_world(struct ssa_db* p_ssa_db_smdb, 
 		void * context,
 		be64_t port_guid,
 		ssa_pr_path_dump_t dump_clbk,
 		void* clbk_prm);
 
-extern ssa_pr_status_t ssa_pr_whole_world(struct ssa_db_smdb* p_ssa_db_smdb, 
+extern ssa_pr_status_t ssa_pr_whole_world(struct ssa_db* p_ssa_db_smdb, 
 		void * context,
 		ssa_pr_path_dump_t dump_clbk,
 		void* clbk_prm);

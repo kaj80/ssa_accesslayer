@@ -48,11 +48,14 @@
 BEGIN_C_DECLS
 
 enum ssa_prdb_table_id {
-	SSA_PR_TABLE_ID_TABLE_DEF = -2,
 	SSA_PR_TABLE_ID = 0,
 	SSA_PR_TABLE_ID_MAX
 };
 
+enum ssa_prdb_field_table_id {
+	SSA_PR_TABLE_ID_FIELD_DEF = SSA_PR_TABLE_ID_MAX,
+	SSA_PR_TABLE_ID_FIELD_DEF_MAX
+};
 enum ssa_prdb_ids {
 	SSA_PR_FIELD_ID_PR_DGUID,
 	SSA_PR_FIELD_ID_PR_DLID,
@@ -74,22 +77,7 @@ struct ep_pr_tbl_rec {
 	uint8_t		is_reversible;
 };
 
-struct ssa_prdb {
-	struct db_def                   db_def;
-
-	struct db_dataset               db_table_def;
-	struct db_table_def             *p_def_tbl;
-
-	/* data tables */
-	struct db_dataset               db_tables[SSA_PR_TABLE_ID_MAX];
-	void                            *p_tables[SSA_PR_TABLE_ID_MAX];
-};
-
-extern struct ssa_prdb *ssa_prdb_create(uint64_t num_recs);
-
-extern void ssa_prdb_destroy(struct ssa_prdb * p_prdb);
-
-
+extern struct ssa_db  *ssa_prdb_create(uint64_t num_recs);
 
 END_C_DECLS
 #endif				/* _SSA_PR_DB_H_ */

@@ -44,6 +44,7 @@
 
 #include <glib.h>
 
+#include <ssa_db.h>
 #include <ssa_smdb.h>
 #include <ssa_prdb.h>
 #include <ssa_db_helper.h>
@@ -116,10 +117,10 @@ static void print_memory_usage(const char* prefix)
 	pf = NULL;
 }
 
-static size_t get_dataset_count(const struct ssa_db_smdb *p_ssa_db_smdb,
+static size_t get_dataset_count(const struct ssa_db *p_ssa_db_smdb,
 		unsigned int table_id)
 {
-	const struct db_dataset *p_dataset = &p_ssa_db_smdb->db_tables[table_id];
+	const struct db_dataset *p_dataset = &p_ssa_db_smdb->p_db_tables[table_id];
 	return ntohll(p_dataset->set_count);
 }
 
@@ -153,10 +154,10 @@ static void print_input_prm(const struct input_prm *prm)
 	printf("SMDB database path: %s\n",prm->smdb_path);
 	if(prm->id) {
 		if(prm->is_guid) {
-			printf("Input GUID: 0x%\n"PRIx64"",prm->id);
+			printf("Input GUID: 0x%"PRIx64"\n",prm->id);
 			return;
 		} else {
-			printf("Input LID: 0x%\n"PRIx16"",prm->id);
+			printf("Input LID: 0x%"PRIx16"\n",prm->id);
 			return;
 		}
 	} else if(strlen(prm->input_path)) {
@@ -189,12 +190,12 @@ static gint path_compare(gconstpointer a,gconstpointer b)
 	return diff_from ? diff_from : diff_to;
 }
 
-static const struct ep_port_tbl_rec* find_port(const struct ssa_db_smdb* p_ssa_db_smdb,
+static const struct ep_port_tbl_rec* find_port(const struct ssa_db* p_ssa_db_smdb,
 		const be16_t lid)
 {
 	size_t i = 0;
 	const struct ep_port_tbl_rec  *p_port_tbl = 
-		(const struct ep_port_tbl_rec*)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_PORT];
+		(const struct ep_port_tbl_rec*)p_ssa_db_smdb->pp_tables[SSA_TABLE_ID_PORT];
 	const size_t count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_PORT);
 
 	for (i = 0; i < count; i++){
@@ -204,12 +205,12 @@ static const struct ep_port_tbl_rec* find_port(const struct ssa_db_smdb* p_ssa_d
 	return NULL;
 }
 
-static const struct ep_guid_to_lid_tbl_rec *find_guid_to_lid_rec_by_lid(const struct ssa_db_smdb* p_ssa_db_smdb,
+static const struct ep_guid_to_lid_tbl_rec *find_guid_to_lid_rec_by_lid(const struct ssa_db* p_ssa_db_smdb,
 		const be16_t lid)
 {
 	size_t i =0;
 	const struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl = 
-		(struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
+		(struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->pp_tables[SSA_TABLE_ID_GUID_TO_LID];
 	const size_t count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
 
 	for (i = 0; i < count; i++) {
@@ -218,7 +219,7 @@ static const struct ep_guid_to_lid_tbl_rec *find_guid_to_lid_rec_by_lid(const st
 	}
 	return NULL;
 }
-static void dump_pr(GPtrArray *path_arr,struct ssa_db_smdb *p_smdb,FILE *fd)
+static void dump_pr(GPtrArray *path_arr,struct ssa_db *p_smdb,FILE *fd)
 {
 	guint i = 0;
 	uint16_t prev_lid = 0;
@@ -261,9 +262,9 @@ static void ssa_pr_path_output(const ssa_path_parms_t *p_path_prm, void *prm)
 	g_ptr_array_add(path_arr,p_my_path);
 }
 
-static struct ssa_db_smdb *load_smdb(const char *path)
+static struct ssa_db *load_smdb(const char *path)
 {
-	struct ssa_db_smdb *db_diff = NULL; 
+	struct ssa_db *db_diff = NULL; 
 	clock_t start, end;
 	double cpu_time_used;
 
@@ -280,12 +281,13 @@ static struct ssa_db_smdb *load_smdb(const char *path)
 	} else {
 		fprintf(stderr,"Database loading is failed.\n");
 	}
+
 	return db_diff;
 }
 
-static void destroy_smdb(struct ssa_db_smdb *db_diff)
+static void destroy_smdb(struct ssa_db *db_diff)
 {
-	ssa_db_smdb_destroy(db_diff);
+	ssa_db_destroy(db_diff);
 	printf("smdb database is destroyed.\n");
 }
 
@@ -339,7 +341,7 @@ static int compare_ints(uint64_t a,uint64_t b)
 }
 
 static size_t get_input_guids(const struct input_prm *p_prm,
-		struct ssa_db_smdb *p_db,
+		struct ssa_db *p_db,
 		GArray* p_arr)
 {
 	assert(p_prm && p_arr && p_db);
@@ -352,7 +354,7 @@ static size_t get_input_guids(const struct input_prm *p_prm,
 		size_t i = 0;
 
 		const struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl =
-			(struct ep_guid_to_lid_tbl_rec *)p_db->p_tables[SSA_TABLE_ID_GUID_TO_LID];
+			(struct ep_guid_to_lid_tbl_rec *)p_db->pp_tables[SSA_TABLE_ID_GUID_TO_LID];
 		const size_t count = get_dataset_count(p_db,SSA_TABLE_ID_GUID_TO_LID);
 
 		for (i = 0; i < count; i++) { 
@@ -381,7 +383,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	FILE *fd_dump = NULL;
 	FILE *fd_log = NULL;
 	int close_log = 0;
-	struct ssa_db_smdb *p_db_diff = NULL;
+	struct ssa_db *p_db_diff = NULL;
 	void *p_context = NULL;
 	be64_t *p_guids = NULL;
 	size_t count_guids = 0;
@@ -390,7 +392,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	guint i = 0;
 	int res = 0;
 	ssa_pr_status_t pr_res = SSA_PR_SUCCESS;
-	struct ssa_prdb *p_prdb = NULL;
+	struct ssa_db *p_prdb = NULL;
 
 	if(!strlen(p_prm->log_path) || !strcmp(p_prm->log_path,"stderr"))
 		fd_log = stderr;
@@ -453,12 +455,7 @@ static int run_pr_calculation(struct input_prm* p_prm)
 		if(guids_arr->len) {
 			be64_t guid = htonll(g_array_index(guids_arr,uint64_t,0));
 			p_prdb = ssa_pr_compute_half_world(p_db_diff,p_context,guid);
-			if(p_prdb) {
-				fprintf(stdout,"prdb database is created\n");
-				ssa_prdb_destroy(p_prdb);
-				p_prdb = NULL;
-			} else
-			{
+			if(!p_prdb) {
 				fprintf(stderr,"Path record computation is failed. prdb database is not created\n");
 				goto Exit;
 			}
@@ -488,6 +485,11 @@ static int run_pr_calculation(struct input_prm* p_prm)
 	if(!dump_to_prdb) {
 		printf("%u path records found\n",path_arr->len);
 		dump_pr(path_arr,p_db_diff,fd_dump);
+	} else {
+		ssa_db_save(p_prm->prdb_path,p_prdb,SSA_DB_HELPER_DEBUG);
+		fprintf(stdout,"prdb database is created\n");
+		ssa_db_destroy(p_prdb);
+		p_prdb = NULL;
 	}
 
 Exit:
@@ -520,7 +522,7 @@ Exit:
 		fd_log = NULL;
 	}
 	if(p_prdb) {
-		ssa_prdb_destroy(p_prdb);
+		ssa_db_destroy(p_prdb);
 		p_prdb = NULL;
 	}
 	return res;

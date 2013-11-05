@@ -38,6 +38,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <math.h>
+#include <ssa_db.h>
 #include <ssa_smdb.h>
 #include <ssa_prdb.h>
 #include "ssa_path_record.h"
@@ -58,7 +59,7 @@ struct ssa_pr_context {
 	struct ssa_pr_smdb_index *p_index;
 };
 
-static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smdb,
+static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db *p_ssa_db_smdb,
 		const struct ssa_pr_context *p_context,
 		const struct ep_guid_to_lid_tbl_rec *p_source_rec,
 		const struct ep_guid_to_lid_tbl_rec *p_dest_rec,
@@ -66,33 +67,33 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 
 
 
-inline static size_t get_dataset_count(const struct ssa_db_smdb *p_ssa_db_smdb,
+inline static size_t get_dataset_count(const struct ssa_db *p_ssa_db_smdb,
 		unsigned int table_id)
 {
 	SSA_ASSERT(p_ssa_db_smdb);
 	SSA_ASSERT(table_id < SSA_TABLE_ID_MAX);
-	SSA_ASSERT(&p_ssa_db_smdb->db_tables[table_id]);
+	SSA_ASSERT(&p_ssa_db_smdb->p_db_tables[table_id]);
 
-	return ntohll(p_ssa_db_smdb->db_tables[table_id].set_count);
+	return ntohll(p_ssa_db_smdb->p_db_tables[table_id].set_count);
 }
 
 static void insert_pr_to_prdb(const ssa_path_parms_t *p_path_prm, void *prm)
 {
-	struct ssa_prdb *p_prdb = NULL;
+	struct ssa_db *p_prdb = NULL;
 	struct db_dataset *p_dataset = NULL;
 	uint64_t set_size = 0, set_count = 0;
 	struct ep_pr_tbl_rec *p_rec = NULL;
 
-	p_prdb = (struct ssa_prdb*)prm;
+	p_prdb = (struct ssa_db*)prm;
 	SSA_ASSERT(p_prdb);
 
-	p_dataset = p_prdb->db_tables +SSA_PR_TABLE_ID;
+	p_dataset = p_prdb->p_db_tables + SSA_PR_TABLE_ID;
 	SSA_ASSERT(p_dataset);
 
 	set_size = ntohll(p_dataset->set_size);
 	set_count = ntohll(p_dataset->set_count);
 
-	p_rec = ((struct ep_pr_tbl_rec *)p_prdb->p_tables[SSA_PR_TABLE_ID]) + set_count;
+	p_rec = ((struct ep_pr_tbl_rec *)p_prdb->pp_tables[SSA_PR_TABLE_ID]) + set_count;
 	SSA_ASSERT(p_rec);
 
 	p_rec->guid = p_path_prm->to_guid;
@@ -110,7 +111,7 @@ static void insert_pr_to_prdb(const ssa_path_parms_t *p_path_prm, void *prm)
 	p_dataset->set_size = htonll(set_size);
 }
 
-ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb, 
+ssa_pr_status_t ssa_pr_half_world(struct ssa_db *p_ssa_db_smdb, 
 		void * p_ctnx,
 		be64_t port_guid,
 		ssa_pr_path_dump_t dump_clbk,
@@ -138,7 +139,7 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 		return SSA_PR_ERROR;
 	}
 
-	p_guid_to_lid_tbl = (const struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
+	p_guid_to_lid_tbl = (const struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->pp_tables[SSA_TABLE_ID_GUID_TO_LID];
 	SSA_ASSERT(p_guid_to_lid_tbl);
 
 	guid_to_lid_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
@@ -213,29 +214,27 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	return SSA_PR_SUCCESS;
 }
 										
-struct ssa_prdb *ssa_pr_compute_half_world(struct ssa_db_smdb *p_ssa_db_smdb, 
+struct ssa_db *ssa_pr_compute_half_world(struct ssa_db *p_ssa_db_smdb, 
 		void * p_ctnx,
 		be64_t port_guid)
 {
-	struct ssa_prdb *p_prdb = NULL;
+	struct ssa_db *p_prdb = NULL;
 	uint64_t record_num = 0;
 	size_t guid_to_lid_count = 0;
 	const struct ep_guid_to_lid_tbl_rec *p_guid_to_lid_tbl = NULL;
 	const struct ep_guid_to_lid_tbl_rec *p_curr_rec = NULL;
 	size_t i = 0;
 	ssa_pr_status_t res = SSA_PR_SUCCESS;
+	uint16_t source_base_lid = 0;
+	uint16_t source_last_lid = 0;
 
 	SSA_ASSERT(p_ssa_db_smdb);
 
-	p_guid_to_lid_tbl = (const struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
+	p_guid_to_lid_tbl = (const struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->pp_tables[SSA_TABLE_ID_GUID_TO_LID];
 	SSA_ASSERT(p_guid_to_lid_tbl);
 
 	guid_to_lid_count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
-
-	for(i = 0;i < guid_to_lid_count;++i) {
-		p_curr_rec = p_guid_to_lid_tbl + i;
-		record_num += pow(2,p_curr_rec ->lmc);
-	}
+	record_num = guid_to_lid_count * guid_to_lid_count * 2;  
 
 	p_prdb = ssa_prdb_create(record_num);
 	if(!p_prdb) {
@@ -253,14 +252,14 @@ struct ssa_prdb *ssa_pr_compute_half_world(struct ssa_db_smdb *p_ssa_db_smdb,
 	return p_prdb;
 Error:
 	if(p_prdb) {
-		ssa_prdb_destroy(p_prdb);
+		ssa_db_destroy(p_prdb);
 		free(p_prdb);
 		p_prdb = NULL;
 		return NULL;
 	}
 }
 
-ssa_pr_status_t ssa_pr_whole_world(struct ssa_db_smdb* p_ssa_db_smdb, 
+ssa_pr_status_t ssa_pr_whole_world(struct ssa_db* p_ssa_db_smdb, 
 		void * context,
 		ssa_pr_path_dump_t dump_clbk,
 		void* clbk_prm)
@@ -272,7 +271,7 @@ ssa_pr_status_t ssa_pr_whole_world(struct ssa_db_smdb* p_ssa_db_smdb,
 
 	SSA_ASSERT(p_ssa_db_smdb);
 
-	p_guid_to_lid_tbl = (struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_GUID_TO_LID];
+	p_guid_to_lid_tbl = (struct ep_guid_to_lid_tbl_rec *)p_ssa_db_smdb->pp_tables[SSA_TABLE_ID_GUID_TO_LID];
 	SSA_ASSERT(p_guid_to_lid_tbl);
 
 	count = get_dataset_count(p_ssa_db_smdb,SSA_TABLE_ID_GUID_TO_LID);
@@ -290,7 +289,7 @@ ssa_pr_status_t ssa_pr_whole_world(struct ssa_db_smdb* p_ssa_db_smdb,
 
 
 
-static inline const struct ep_port_tbl_rec *get_switch_port(const struct ssa_db_smdb *p_ssa_db_smdb,
+static inline const struct ep_port_tbl_rec *get_switch_port(const struct ssa_db *p_ssa_db_smdb,
 		const struct ssa_pr_smdb_index * p_index,
 		const be16_t switch_lid,
 		const int port_num)
@@ -298,7 +297,7 @@ static inline const struct ep_port_tbl_rec *get_switch_port(const struct ssa_db_
 	return find_port(p_ssa_db_smdb,p_index,switch_lid,port_num);
 }
 
-static inline const struct ep_port_tbl_rec *get_host_port(const struct ssa_db_smdb *p_ssa_db_smdb,
+static inline const struct ep_port_tbl_rec *get_host_port(const struct ssa_db *p_ssa_db_smdb,
 		const struct ssa_pr_smdb_index * p_index,
 		const be16_t lid)
 {
@@ -310,7 +309,7 @@ static inline const struct ep_port_tbl_rec *get_host_port(const struct ssa_db_sm
 }
 
 
-static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smdb,
+static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db *p_ssa_db_smdb,
 		const struct ssa_pr_context *p_context,
 		const struct ep_guid_to_lid_tbl_rec *p_source_rec,
 		const struct ep_guid_to_lid_tbl_rec *p_dest_rec,
@@ -330,7 +329,7 @@ static ssa_pr_status_t ssa_pr_path_params(const struct ssa_db_smdb *p_ssa_db_smd
 	SSA_ASSERT(p_path_prm);
 
 	opt_rec = 
-		(const struct ep_subnet_opts_tbl_rec *)p_ssa_db_smdb->p_tables[SSA_TABLE_ID_SUBNET_OPTS];
+		(const struct ep_subnet_opts_tbl_rec *)p_ssa_db_smdb->pp_tables[SSA_TABLE_ID_SUBNET_OPTS];
 	SSA_ASSERT(opt_rec);
 
 	if(p_source_rec->is_switch) 
