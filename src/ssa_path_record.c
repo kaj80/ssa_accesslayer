@@ -53,7 +53,8 @@
 #endif
 
 #define MAX_HOPS 64
-
+#define PK_DEFAULT_VAL CL_NTOH16(0xffff);
+#define SL_DEFAULT_VAL 0
 
 struct ssa_pr_context {
 	struct ssa_pr_smdb_index *p_index;
@@ -173,7 +174,8 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db *p_ssa_db_smdb,
 				path_prm.from_lid = htons(source_lid); 
 				path_prm.to_guid = p_dest_rec->guid;
 				path_prm.to_lid = htons(dest_lid);
-
+				path_prm.sl = SL_DEFAULT_VAL;
+				path_prm.pkey = PK_DEFAULT_VAL;
 
 				path_res = ssa_pr_path_params(p_ssa_db_smdb,p_context,
 						p_source_rec,p_dest_rec,&path_prm);
@@ -186,6 +188,8 @@ ssa_pr_status_t ssa_pr_half_world(struct ssa_db *p_ssa_db_smdb,
 					revers_path_prm.to_guid = path_prm.from_guid;
 					revers_path_prm.to_lid = path_prm.from_lid;
 					revers_path_prm.reversible = 1;
+					revers_path_prm.sl = SL_DEFAULT_VAL;
+					revers_path_prm.pkey= PK_DEFAULT_VAL;
 
 					revers_path_res = ssa_pr_path_params(p_ssa_db_smdb,p_context,
 							p_dest_rec,p_source_rec,&revers_path_prm);
