@@ -41,7 +41,7 @@
 #include <ssa_db.h>
 #include <ssa_smdb.h>
 #include <ssa_prdb.h>
-#include "ssa_path_record.h"
+#include <infiniband/ssa_path_record.h>
 #include "ssa_path_record_helper.h"
 #include "ssa_path_record_data.h"
 

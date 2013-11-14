@@ -48,7 +48,7 @@
 #include <ssa_smdb.h>
 #include <ssa_prdb.h>
 #include <ssa_db_helper.h>
-#include <ssa_path_record.h>
+#include <infiniband/ssa_path_record.h>
 
 
 static const char *log_verbosity_level[] = {"No log","Error","Info","Debug"};
