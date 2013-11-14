@@ -35,12 +35,13 @@
 #endif              /* HAVE_CONFIG_H */
 
 #include <string.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <math.h>
-#include <ssa_db.h>
-#include <ssa_smdb.h>
-#include <ssa_prdb.h>
+#include <infiniband/ssa_db.h>
+#include <infiniband/ssa_smdb.h>
+#include <infiniband/ssa_prdb.h>
 #include <infiniband/ssa_path_record.h>
 #include "ssa_path_record_helper.h"
 #include "ssa_path_record_data.h"
@@ -53,7 +54,7 @@
 #endif
 
 #define MAX_HOPS 64
-#define PK_DEFAULT_VAL CL_NTOH16(0xffff);
+#define PK_DEFAULT_VAL ntohs(0xffff);
 #define SL_DEFAULT_VAL 0
 
 struct ssa_pr_context {
